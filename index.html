@@ -861,6 +861,9 @@ buildFacilityAdvisoryMap();
           </div>
         `;
       }).join("");
+      if (window.innerWidth <= 767) {
+  showMobilePanel("main");
+}
     }
 
     function renderAdvisoriesForFacilityFromCache(ident) {
