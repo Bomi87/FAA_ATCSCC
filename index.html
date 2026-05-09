@@ -300,7 +300,7 @@
 
     <div class="row">
       <label for="dateInput">Advisory Date</label>
-      <input id="dateInput" type="date" value="2026-05-08" />
+   <input id="dateInput" type="date" />
     </div>
 
     <label>Route Overlay</label>
@@ -552,9 +552,33 @@ let isAdvisoryDetailOpen = false;
     /*******************************************************
      * FAA Advisory
      *******************************************************/
+function getTodayUtcDateValue() {
+  return getUtcDateValueByOffset(0);
+}
+
+function getYesterdayUtcDateValue() {
+  return getUtcDateValueByOffset(-1);
+}
+
+function setDefaultAdvisoryDate() {
+  const input = document.getElementById("dateInput");
+
+  if (!input.value) {
+    input.value = getTodayUtcDateValue();
+  }
+}
+    function getUtcDateValueByOffset(daysOffset) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + daysOffset);
+  return d.toISOString().slice(0, 10);
+}
+
+function setDateInputValue(dateValue) {
+  document.getElementById("dateInput").value = dateValue;
+}
     function getDateValue() {
-      return document.getElementById("dateInput").value || "2026-05-08";
-    }
+  return document.getElementById("dateInput").value || getTodayUtcDateValue();
+}
 
     function buildFaaAdvisoryListUrl(date) {
       return (
@@ -604,7 +628,21 @@ function updateFaaLink() {
           throw new Error(data.error || "Apps Script error");
         }
 
-      allAdvisoriesCache = data.advisories || [];
+allAdvisoriesCache = data.advisories || [];
+
+/* 오늘 UTC 조회 결과가 0개면 어제 UTC로 자동 재조회 */
+const todayUtc = getTodayUtcDateValue();
+const yesterdayUtc = getYesterdayUtcDateValue();
+
+if (allAdvisoriesCache.length === 0 && date === todayUtc) {
+  setDateInputValue(yesterdayUtc);
+  updateFaaLink();
+
+  box.innerHTML = "오늘 UTC Advisory 없음. 어제 UTC 날짜로 재조회 중...";
+
+  return loadAllAdvisoriesForDate();
+}
+
 advisoryCacheLoadedAt = Date.now();
 
 buildFacilityAdvisoryMap();
@@ -1454,13 +1492,14 @@ document.addEventListener("click", function (e) {
       }
     });
 
-    updateFaaLink();
+setDefaultAdvisoryDate();
+updateFaaLink();
 
-    loadArtccGeojson()
-      .then(() => {
-        loadAllAdvisoriesForDate();
-        autoLoadRouteFromUrl();
-      })
+loadArtccGeojson()
+  .then(() => {
+    loadAllAdvisoriesForDate();
+    autoLoadRouteFromUrl();
+  })
       .catch(err => {
         console.error(err);
         alert("ARTCC GeoJSON 로드 실패: " + err.message);
