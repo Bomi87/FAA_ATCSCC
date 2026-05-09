@@ -2,95 +2,268 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>FAA ARTCC Advisory Map</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    html, body, #map {
+    html, body {
       margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+
+    #map {
       width: 100%;
       height: 100%;
     }
 
-    .panel {
+    .top-panel {
       position: absolute;
       top: 12px;
       left: 12px;
-      z-index: 999;
-      background: white;
-      padding: 10px;
-      border-radius: 10px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.25);
+      z-index: 1000;
+      width: 310px;
+      max-width: calc(100vw - 24px);
+      background: rgba(255, 255, 255, 0.96);
+      border-radius: 12px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.25);
+      padding: 12px;
       font-size: 12px;
-      width: 280px;
-      max-height: 80vh;
-      overflow: auto;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #111827;
+    }
+
+    .row {
+      margin-bottom: 8px;
+    }
+
+    label {
+      font-weight: 700;
+      display: block;
+      margin-bottom: 4px;
+      color: #374151;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .selected-box {
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 8px;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: #1d4ed8;
+    }
+
+    .hint {
+      color: #6b7280;
+      font-size: 11px;
+      margin-top: 8px;
+      line-height: 1.4;
     }
 
     .artcc-label {
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
-      color: white;
+      color: #ffffff;
       font-size: 12px;
       font-weight: 700;
       text-shadow:
         -1px -1px 0 #000,
          1px -1px 0 #000,
         -1px  1px 0 #000,
-         1px  1px 0 #000;
+         1px  1px 0 #000,
+         0 0 4px rgba(0,0,0,0.8);
     }
 
-    .advisory-item {
-      border-top: 1px solid #ddd;
-      padding: 8px 0;
+    .leaflet-popup-content {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 767px) {
+      .top-panel {
+        width: 270px;
+        font-size: 11px;
+      }
+
+      .title {
+        font-size: 14px;
+      }
+
+      .artcc-label {
+        font-size: 10px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div class="panel">
-    <b>FAA ARTCC Advisory Map</b><br><br>
+  <div class="top-panel">
+    <div class="title">FAA ARTCC Advisory Map</div>
 
-    <label>Date</label><br>
-    <input id="dateInput" type="date" value="2026-05-08" style="width:100%;" />
+    <div class="row">
+      <label for="dateInput">Advisory Date</label>
+      <input id="dateInput" type="date" value="2026-05-08" />
+    </div>
 
-    <br><br>
-    <div>Selected ARTCC: <b id="selectedFacility">-</b></div>
+    <div class="selected-box">
+      Selected ARTCC: <b id="selectedArtcc">-</b><br>
+      Name: <span id="selectedName">-</span>
+    </div>
 
-    <br>
-    <div id="advisoryList">구역을 클릭하세요.</div>
+    <a id="faaListLink" class="btn" href="#" target="_blank">
+      Open FAA Advisory List
+    </a>
+
+    <div class="hint">
+      ARTCC 구역을 클릭하면 해당 날짜 FAA Advisory List 링크가 생성됨.<br>
+      다음 단계에서 Apps Script를 붙이면 클릭한 구역 관련 Advisory만 자동 필터링 가능.
+    </div>
   </div>
 
   <div id="map"></div>
 
   <script>
-    const map = L.map("map").setView([39.5, -98.5], 4);
+    const map = L.map("map", {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([39.5, -98.5], 4);
 
-    L.tileLayer(
+    const streetMap = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
       {
-        maxZoom: 10,
+        maxZoom: 12,
         attribution: "&copy; OpenStreetMap &copy; CARTO"
       }
     ).addTo(map);
 
-    const artccLayer = L.featureGroup().addTo(map);
+    const satelliteMap = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 12,
+        attribution: "Tiles &copy; Esri"
+      }
+    );
 
-    function getArtccStyle(selected) {
+    L.control.layers(
+      {
+        "Street Map": streetMap,
+        "Satellite": satelliteMap
+      },
+      null,
+      {
+        position: "topright",
+        collapsed: false
+      }
+    ).addTo(map);
+
+    const artccGroup = L.featureGroup().addTo(map);
+    let selectedLayer = null;
+    let selectedIdent = "";
+
+    function getDateValue() {
+      return document.getElementById("dateInput").value || "2026-05-08";
+    }
+
+    function buildFaaAdvisoryListUrl(date) {
+      return (
+        "https://www.fly.faa.gov/adv/adv_list" +
+        "?advisoryCategory=All" +
+        "&whichAdvisories=Both" +
+        "&date=" + encodeURIComponent(date) +
+        "&airflow=true&_airflow=on" +
+        "&ctop=true&_ctop=on" +
+        "&gStop=true&_gStop=on" +
+        "&gDelay=true&_gDelay=on" +
+        "&route=true&_route=on" +
+        "&other=true&_other=on"
+      );
+    }
+
+    function getArtccStyle(isSelected) {
       return {
-        color: selected ? "#ff3333" : "#666666",
-        weight: selected ? 3 : 1.5,
-        opacity: 0.9,
-        fillColor: selected ? "#ff3333" : "#999999",
-        fillOpacity: selected ? 0.14 : 0.05
+        color: isSelected ? "#ef4444" : "#6b7280",
+        weight: isSelected ? 3 : 1.5,
+        opacity: 0.95,
+        fillColor: isSelected ? "#ef4444" : "#64748b",
+        fillOpacity: isSelected ? 0.18 : 0.06
       };
     }
 
-    async function loadArtcc() {
+    function updateFaaLink() {
+      const date = getDateValue();
+      const link = document.getElementById("faaListLink");
+      link.href = buildFaaAdvisoryListUrl(date);
+
+      if (selectedIdent) {
+        link.textContent = "Open FAA List - " + selectedIdent;
+      } else {
+        link.textContent = "Open FAA Advisory List";
+      }
+    }
+
+    function selectArtcc(layer, feature) {
+      const p = feature.properties || {};
+      const ident = p.ident || p.facility || p.id || "";
+      const name = p.name || ident;
+
+      if (selectedLayer && selectedLayer.setStyle) {
+        selectedLayer.setStyle(getArtccStyle(false));
+      }
+
+      selectedLayer = layer;
+      selectedIdent = ident;
+
+      layer.setStyle(getArtccStyle(true));
+      layer.bringToFront();
+
+      document.getElementById("selectedArtcc").textContent = ident || "-";
+      document.getElementById("selectedName").textContent = name || "-";
+
+      updateFaaLink();
+    }
+
+    async function loadArtccGeojson() {
       const res = await fetch("artcc.geojson?v=" + Date.now(), {
         cache: "no-store"
       });
@@ -101,10 +274,12 @@
 
       const data = await res.json();
 
-      const geo = L.geoJSON(data, {
-        style: () => getArtccStyle(false),
+      const geoLayer = L.geoJSON(data, {
+        style: function () {
+          return getArtccStyle(false);
+        },
 
-        onEachFeature: function(feature, layer) {
+        onEachFeature: function (feature, layer) {
           const p = feature.properties || {};
           const ident = p.ident || p.facility || p.id || "";
           const name = p.name || ident;
@@ -112,58 +287,52 @@
           layer.bindTooltip(ident, {
             permanent: true,
             direction: "center",
-            className: "artcc-label"
+            className: "artcc-label",
+            opacity: 1
           });
 
-          layer.bindPopup(`<b>${ident}</b><br>${name}`);
+          layer.bindPopup(
+            "<b>" + ident + "</b><br>" +
+            name + "<br><br>" +
+            "Click area to select."
+          );
 
-          layer.on("click", function() {
-            artccLayer.eachLayer(function(group) {
-              if (group.eachLayer) {
-                group.eachLayer(function(l) {
-                  if (l.setStyle) l.setStyle(getArtccStyle(false));
-                });
-              }
-            });
+          layer.on("click", function () {
+            selectArtcc(layer, feature);
+          });
 
-            layer.setStyle(getArtccStyle(true));
-            selectFacility(ident);
+          layer.on("mouseover", function () {
+            if (layer !== selectedLayer) {
+              layer.setStyle({
+                weight: 2.5,
+                fillOpacity: 0.12
+              });
+            }
+          });
+
+          layer.on("mouseout", function () {
+            if (layer !== selectedLayer) {
+              layer.setStyle(getArtccStyle(false));
+            }
           });
         }
       });
 
-      geo.addTo(artccLayer);
-      map.fitBounds(geo.getBounds(), { padding: [20, 20] });
+      geoLayer.addTo(artccGroup);
+
+      const bounds = geoLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [20, 20] });
+      }
     }
 
-    function selectFacility(ident) {
-      document.getElementById("selectedFacility").textContent = ident;
-      loadAdvisoriesForFacility(ident);
-    }
+    document.getElementById("dateInput").addEventListener("change", updateFaaLink);
 
-    async function loadAdvisoriesForFacility(ident) {
-      const date = document.getElementById("dateInput").value;
-      const box = document.getElementById("advisoryList");
+    updateFaaLink();
 
-      box.innerHTML = "조회 중...";
-
-      /*
-        다음 단계에서 Apps Script Web App URL 연결:
-        const API_URL = "https://script.google.com/macros/s/XXXX/exec";
-        const url = API_URL + "?date=" + date + "&facility=" + ident;
-      */
-
-      box.innerHTML = `
-        <div class="advisory-item">
-          <b>${ident}</b> / ${date}<br>
-          여기에 FAA Advisory 조회 결과 표시 예정
-        </div>
-      `;
-    }
-
-    loadArtcc().catch(err => {
+    loadArtccGeojson().catch(err => {
       console.error(err);
-      alert(err.message);
+      alert("ARTCC GeoJSON 로드 실패: " + err.message);
     });
   </script>
 </body>
