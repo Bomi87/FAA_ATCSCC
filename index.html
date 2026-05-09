@@ -28,8 +28,10 @@
       top: 12px;
       left: 12px;
       z-index: 1000;
-      width: 320px;
+      width: 330px;
       max-width: calc(100vw - 24px);
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
       background: rgba(255, 255, 255, 0.96);
       border-radius: 12px;
       box-shadow: 0 3px 14px rgba(0,0,0,0.25);
@@ -62,35 +64,6 @@
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       font-size: 12px;
-    }
-
-    .selected-box {
-      background: #f3f4f6;
-      border-radius: 8px;
-      padding: 8px;
-      margin-top: 8px;
-      line-height: 1.5;
-    }
-
-    .btn {
-      display: block;
-      width: 100%;
-      box-sizing: border-box;
-      margin-top: 8px;
-      padding: 8px;
-      border: none;
-      border-radius: 8px;
-      background: #2563eb;
-      color: white;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-    }
-
-    .btn:hover {
-      background: #1d4ed8;
     }
 
     .route-btn-row {
@@ -136,11 +109,51 @@
       background: #4b5563;
     }
 
+    .selected-box {
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 8px;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: #1d4ed8;
+    }
+
     .status {
       margin-top: 8px;
       font-size: 11px;
       color: #374151;
       line-height: 1.4;
+    }
+
+    .advisory-box {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .advisory-item {
+      border-top: 1px solid #e5e7eb;
+      padding: 7px 0;
     }
 
     .hint {
@@ -165,18 +178,19 @@
          0 0 4px rgba(0,0,0,0.8);
     }
 
-    .route-label {
+    .route-waypoint-label {
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
-      color: #ffff00;
-      font-size: 12px;
+      color: #ffffff;
+      font-size: 11px;
       font-weight: 700;
       text-shadow:
         -1px -1px 0 #000,
          1px -1px 0 #000,
         -1px  1px 0 #000,
-         1px  1px 0 #000;
+         1px  1px 0 #000,
+         0 0 4px rgba(0,0,0,0.8);
     }
 
     .leaflet-popup-content {
@@ -184,9 +198,43 @@
       line-height: 1.4;
     }
 
+    .popup-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .popup-body {
+      font-size: 11px;
+      line-height: 1.45;
+      max-width: 260px;
+      word-break: break-word;
+    }
+
+    .popup-section {
+      margin-top: 6px;
+    }
+
+    .popup-section table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    .popup-section td {
+      border-bottom: 1px solid #eee;
+      padding: 3px 4px;
+      vertical-align: top;
+    }
+
+    .popup-section td:first-child {
+      font-weight: 600;
+      white-space: nowrap;
+      width: 1%;
+    }
+
     @media (max-width: 767px) {
       .top-panel {
-        width: 280px;
+        width: 285px;
         font-size: 11px;
       }
 
@@ -196,6 +244,10 @@
 
       .artcc-label {
         font-size: 10px;
+      }
+
+      .route-waypoint-label {
+        font-size: 9px;
       }
     }
   </style>
@@ -228,18 +280,39 @@
     </a>
 
     <div id="routeStatus" class="status">Route 미선택</div>
+    <div id="advisoryBox" class="advisory-box">ARTCC를 클릭하면 FAA Advisory 조회.</div>
 
     <div class="hint">
-      HL8080 또는 HL8372 버튼을 누르면 기존 FLIGHT_MAP의 KML 루트가 이 지도 위에 표시됨.
+      Route는 기존 FLIGHT_MAP의 KML을 불러오고, KML Style / Name / Description / ExtendedData를 최대한 유지해서 표시함.
     </div>
   </div>
 
   <div id="map"></div>
 
   <script>
+    /*******************************************************
+     * Config
+     *******************************************************/
+    const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
+    const FAA_APPS_SCRIPT_URL = "여기에_AppsScript_WebApp_URL";
+
+    // FAA ARTCC 앱에서는 미국 관제구역과 맞추기 위해 경도 기준을 미국 쪽으로 둠.
+    // 한국/일본 쪽 좌표는 -234 같은 식으로 왼쪽 world copy에 배치되고,
+    // 미국 구간은 -170~-70 부근에 유지됨.
+    const ROUTE_REFERENCE_LON = -100;
+
+    const POPUP_OPTIONS = {
+      maxWidth: 300,
+      autoPan: true
+    };
+
+    /*******************************************************
+     * Map
+     *******************************************************/
     const map = L.map("map", {
       zoomControl: true,
-      preferCanvas: true
+      preferCanvas: true,
+      worldCopyJump: false
     }).setView([39.5, -98.5], 4);
 
     const streetMap = L.tileLayer(
@@ -277,8 +350,123 @@
     let selectedIdent = "";
     let currentRouteName = "";
 
-    const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
+    /*******************************************************
+     * Basic Utils
+     *******************************************************/
+    function escapeHtml(str) {
+      return String(str || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
 
+    function cleanText(s) {
+      return String(s || "")
+        .replace(/\r/g, "\n")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n[ \t]+/g, "\n")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    function textOfFirst(parent, tagName) {
+      const node = parent.getElementsByTagName(tagName)[0];
+      return node ? node.textContent.trim() : "";
+    }
+
+    function getDirectChild(parent, tagName) {
+      for (const node of parent.children || []) {
+        if (node.tagName === tagName) return node;
+      }
+      return null;
+    }
+
+    function parseXml(text) {
+      return new DOMParser().parseFromString(text, "text/xml");
+    }
+
+    function buildPopupHtml(title, descriptionHtml, extraRows = []) {
+      let html = `<div class="popup-body">`;
+
+      if (title) {
+        html += `<div class="popup-title">${escapeHtml(title)}</div>`;
+      }
+
+      if (descriptionHtml) {
+        html += `<div class="popup-section">${descriptionHtml}</div>`;
+      }
+
+      if (extraRows && extraRows.length) {
+        html += `<div class="popup-section"><table>`;
+        extraRows.forEach(row => {
+          html += `<tr><td>${escapeHtml(row.key)}</td><td>${row.value}</td></tr>`;
+        });
+        html += `</table></div>`;
+      }
+
+      html += `</div>`;
+      return html;
+    }
+
+    /*******************************************************
+     * Anti-Meridian Helpers
+     *******************************************************/
+    function wrapLon180(lon) {
+      let x = Number(lon);
+      if (!isFinite(x)) return lon;
+
+      while (x <= -180) x += 360;
+      while (x > 180) x -= 360;
+
+      return x;
+    }
+
+    function shiftLonNearReference(lon, referenceLon) {
+      let x = wrapLon180(lon);
+
+      if (!isFinite(referenceLon)) return x;
+
+      while (x - referenceLon > 180) x -= 360;
+      while (x - referenceLon < -180) x += 360;
+
+      return x;
+    }
+
+    function unwrapLonNext(prevLon, currentLon) {
+      let x = wrapLon180(currentLon);
+
+      while (x - prevLon > 180) x -= 360;
+      while (x - prevLon < -180) x += 360;
+
+      return x;
+    }
+
+    function unwrapCoordSequence(coords, referenceLon) {
+      if (!Array.isArray(coords) || !coords.length) return [];
+
+      const firstLon = shiftLonNearReference(coords[0].lon, referenceLon);
+      const result = [[coords[0].lat, firstLon]];
+      let prevLon = firstLon;
+
+      for (let i = 1; i < coords.length; i++) {
+        const nextLon = unwrapLonNext(prevLon, coords[i].lon);
+        result.push([coords[i].lat, nextLon]);
+        prevLon = nextLon;
+      }
+
+      return result;
+    }
+
+    function toRenderLatLng(lat, lon) {
+      return [lat, shiftLonNearReference(lon, ROUTE_REFERENCE_LON)];
+    }
+
+    /*******************************************************
+     * FAA Advisory Link / Apps Script
+     *******************************************************/
     function getDateValue() {
       return document.getElementById("dateInput").value || "2026-05-08";
     }
@@ -286,8 +474,8 @@
     function buildFaaAdvisoryListUrl(date) {
       return (
         "https://www.fly.faa.gov/adv/adv_list" +
-        "?advisoryCategory=All" +
-        "&whichAdvisories=Both" +
+        "?whichAdvisories=ATCSCC" +
+        "&advisoryCategory=All" +
         "&date=" + encodeURIComponent(date) +
         "&airflow=true&_airflow=on" +
         "&ctop=true&_ctop=on" +
@@ -296,16 +484,6 @@
         "&route=true&_route=on" +
         "&other=true&_other=on"
       );
-    }
-
-    function getArtccStyle(isSelected) {
-      return {
-        color: isSelected ? "#ef4444" : "#6b7280",
-        weight: isSelected ? 3 : 1.5,
-        opacity: 0.95,
-        fillColor: isSelected ? "#ef4444" : "#64748b",
-        fillOpacity: isSelected ? 0.18 : 0.06
-      };
     }
 
     function updateFaaLink() {
@@ -318,6 +496,68 @@
       } else {
         link.textContent = "Open FAA Advisory List";
       }
+    }
+
+    async function loadAdvisoriesForFacility(ident) {
+      const box = document.getElementById("advisoryBox");
+
+      if (!FAA_APPS_SCRIPT_URL || FAA_APPS_SCRIPT_URL.includes("여기에_")) {
+        box.innerHTML = "Apps Script URL 미설정. 현재는 FAA List 버튼으로 원문 확인.";
+        return;
+      }
+
+      const date = getDateValue();
+      box.innerHTML = ident + " Advisory 조회 중...";
+
+      const url =
+        FAA_APPS_SCRIPT_URL +
+        "?date=" + encodeURIComponent(date) +
+        "&facility=" + encodeURIComponent(ident) +
+        "&includeDetails=true";
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.ok) {
+          throw new Error(data.error || "Apps Script error");
+        }
+
+        if (!data.advisories || data.advisories.length === 0) {
+          box.innerHTML = ident + " 관련 Advisory 없음";
+          return;
+        }
+
+        box.innerHTML = data.advisories.map(a => {
+          return `
+            <div class="advisory-item">
+              <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+              ${escapeHtml(a.title || "")}<br>
+              ${a.eventTime ? "Event: " + escapeHtml(a.eventTime) + "<br>" : ""}
+              ${a.constrainedFacilities ? "Facility: " + escapeHtml(a.constrainedFacilities) + "<br>" : ""}
+              ${a.message ? "<div style='margin-top:4px;'>" + escapeHtml(a.message).slice(0, 350) + "</div>" : ""}
+              ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원문 열기</a>" : ""}
+            </div>
+          `;
+        }).join("");
+
+      } catch (err) {
+        console.error(err);
+        box.innerHTML = "Advisory 조회 실패: " + escapeHtml(err.message);
+      }
+    }
+
+    /*******************************************************
+     * ARTCC Layer
+     *******************************************************/
+    function getArtccStyle(isSelected) {
+      return {
+        color: isSelected ? "#ef4444" : "#6b7280",
+        weight: isSelected ? 3 : 1.5,
+        opacity: 0.95,
+        fillColor: isSelected ? "#ef4444" : "#64748b",
+        fillOpacity: isSelected ? 0.18 : 0.06
+      };
     }
 
     function selectArtcc(layer, feature) {
@@ -339,6 +579,7 @@
       document.getElementById("selectedName").textContent = name || "-";
 
       updateFaaLink();
+      loadAdvisoriesForFacility(ident);
     }
 
     async function loadArtccGeojson() {
@@ -370,8 +611,8 @@
           });
 
           layer.bindPopup(
-            "<b>" + ident + "</b><br>" +
-            name + "<br><br>" +
+            "<b>" + escapeHtml(ident) + "</b><br>" +
+            escapeHtml(name) + "<br><br>" +
             "Click area to select."
           );
 
@@ -398,12 +639,159 @@
 
       geoLayer.addTo(artccGroup);
 
-      const bounds = geoLayer.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [20, 20] });
-      }
+      // ZAN 포함 시 알래스카까지 잡혀서 본토가 작아질 수 있으므로 본토 중심 고정
+      map.setView([39.5, -98.5], 4);
     }
 
+    /*******************************************************
+     * KML Style Parser
+     *******************************************************/
+    function kmlColorToCss(kmlColor, fallbackColor, fallbackOpacity) {
+      if (!kmlColor || typeof kmlColor !== "string") {
+        return { color: fallbackColor, opacity: fallbackOpacity };
+      }
+
+      const s = kmlColor.trim().replace("#", "");
+      if (s.length !== 8) {
+        return { color: fallbackColor, opacity: fallbackOpacity };
+      }
+
+      const aa = s.substring(0, 2);
+      const bb = s.substring(2, 4);
+      const gg = s.substring(4, 6);
+      const rr = s.substring(6, 8);
+
+      const opacity = parseInt(aa, 16) / 255;
+      const color = "#" + rr + gg + bb;
+
+      return {
+        color,
+        opacity: isNaN(opacity) ? fallbackOpacity : opacity
+      };
+    }
+
+    function parseStyleNode(styleNode) {
+      if (!styleNode) return {};
+
+      const lineStyleNode = styleNode.getElementsByTagName("LineStyle")[0];
+      const polyStyleNode = styleNode.getElementsByTagName("PolyStyle")[0];
+      const labelStyleNode = styleNode.getElementsByTagName("LabelStyle")[0];
+      const iconStyleNode = styleNode.getElementsByTagName("IconStyle")[0];
+
+      const style = {};
+
+      if (lineStyleNode) {
+        style.lineColor = textOfFirst(lineStyleNode, "color");
+        const width = parseFloat(textOfFirst(lineStyleNode, "width"));
+        style.lineWidth = Number.isFinite(width) ? width : 4;
+      }
+
+      if (polyStyleNode) {
+        style.polyColor = textOfFirst(polyStyleNode, "color");
+        const fillText = textOfFirst(polyStyleNode, "fill");
+        const outlineText = textOfFirst(polyStyleNode, "outline");
+        style.fill = fillText === "" ? true : fillText !== "0";
+        style.outline = outlineText === "" ? true : outlineText !== "0";
+      }
+
+      if (labelStyleNode) {
+        style.labelColor = textOfFirst(labelStyleNode, "color");
+        const labelScale = parseFloat(textOfFirst(labelStyleNode, "scale"));
+        style.labelScale = Number.isFinite(labelScale) ? labelScale : 1;
+      }
+
+      if (iconStyleNode) {
+        style.iconColor = textOfFirst(iconStyleNode, "color");
+        const iconScale = parseFloat(textOfFirst(iconStyleNode, "scale"));
+        style.iconScale = Number.isFinite(iconScale) ? iconScale : 1;
+
+        const iconNode = iconStyleNode.getElementsByTagName("Icon")[0];
+        if (iconNode) {
+          style.iconHref = textOfFirst(iconNode, "href");
+        }
+      }
+
+      return style;
+    }
+
+    function mergeStyles(baseStyle, overrideStyle) {
+      return {
+        ...(baseStyle || {}),
+        ...(overrideStyle || {})
+      };
+    }
+
+    function buildStyleIndex(xml) {
+      const styleMap = {};
+      const styleNodes = Array.from(xml.getElementsByTagName("Style"));
+
+      styleNodes.forEach(styleNode => {
+        const id = styleNode.getAttribute("id");
+        if (!id) return;
+        styleMap["#" + id] = parseStyleNode(styleNode);
+      });
+
+      return styleMap;
+    }
+
+    function buildStyleMapIndex(xml) {
+      const styleMapIndex = {};
+      const styleMapNodes = Array.from(xml.getElementsByTagName("StyleMap"));
+
+      styleMapNodes.forEach(node => {
+        const id = node.getAttribute("id");
+        if (!id) return;
+
+        const pairs = Array.from(node.getElementsByTagName("Pair"));
+        let normalUrl = "";
+
+        pairs.forEach(pair => {
+          const key = textOfFirst(pair, "key");
+          const styleUrl = textOfFirst(pair, "styleUrl");
+          if (key === "normal" && styleUrl) {
+            normalUrl = styleUrl;
+          }
+        });
+
+        if (normalUrl) {
+          styleMapIndex["#" + id] = normalUrl;
+        }
+      });
+
+      return styleMapIndex;
+    }
+
+    function buildExtendedDataRows(placemark) {
+      const rows = [];
+
+      const simpleDatas = placemark.getElementsByTagName("SimpleData");
+      Array.from(simpleDatas).forEach(node => {
+        const key = node.getAttribute("name") || "Data";
+        const value = escapeHtml(node.textContent || "");
+        if (value) rows.push({ key, value });
+      });
+
+      const datas = placemark.getElementsByTagName("Data");
+      Array.from(datas).forEach(node => {
+        const key = node.getAttribute("name") || "Data";
+        const valueNode = node.getElementsByTagName("value")[0];
+        const value = valueNode ? escapeHtml(valueNode.textContent || "") : "";
+        if (value) rows.push({ key, value });
+      });
+
+      return rows;
+    }
+
+    function resolveIconUrl(href) {
+      if (!href) return "";
+      if (/^https?:\/\//i.test(href)) return href;
+      if (href.startsWith("/")) return "https://bomi87.github.io" + href;
+      return ROUTE_BASE_URL + href;
+    }
+
+    /*******************************************************
+     * KML Feature Parser
+     *******************************************************/
     function parseCoordinates(coordText) {
       if (!coordText) return [];
 
@@ -427,35 +815,240 @@
         );
     }
 
-    function parseKmlRoute(kmlText) {
-      const xml = new DOMParser().parseFromString(kmlText, "text/xml");
-      const lineNodes = Array.from(xml.getElementsByTagName("LineString"));
-      const pointNodes = Array.from(xml.getElementsByTagName("Point"));
+    function extractKMLFeatures(kmlText) {
+      const xml = parseXml(kmlText);
+      const styleIndex = buildStyleIndex(xml);
+      const styleMapIndex = buildStyleMapIndex(xml);
+      const placemarks = Array.from(xml.getElementsByTagName("Placemark"));
 
-      const lines = [];
-      const points = [];
+      const features = [];
 
-      lineNodes.forEach(node => {
-        const coordNode = node.getElementsByTagName("coordinates")[0];
-        if (!coordNode) return;
+      placemarks.forEach(pm => {
+        const name = textOfFirst(pm, "name");
+        const description = textOfFirst(pm, "description");
 
-        const coords = parseCoordinates(coordNode.textContent);
-        if (coords.length >= 2) {
-          lines.push(coords);
+        let styleUrl = textOfFirst(pm, "styleUrl");
+        if (styleMapIndex[styleUrl]) {
+          styleUrl = styleMapIndex[styleUrl];
         }
+
+        const sharedStyle = styleIndex[styleUrl] || {};
+        const inlineStyleNode = getDirectChild(pm, "Style");
+        const inlineStyle = parseStyleNode(inlineStyleNode);
+        const style = mergeStyles(sharedStyle, inlineStyle);
+
+        const extraRows = buildExtendedDataRows(pm);
+
+        const pointNodes = pm.getElementsByTagName("Point");
+        const lineNodes = pm.getElementsByTagName("LineString");
+        const polyNodes = pm.getElementsByTagName("Polygon");
+
+        Array.from(pointNodes).forEach(node => {
+          const coords = parseCoordinates(textOfFirst(node, "coordinates"));
+          if (coords.length) {
+            features.push({
+              type: "Point",
+              name,
+              description,
+              extraRows,
+              style,
+              coords: coords[0]
+            });
+          }
+        });
+
+        Array.from(lineNodes).forEach(node => {
+          const coords = parseCoordinates(textOfFirst(node, "coordinates"));
+          if (coords.length >= 2) {
+            features.push({
+              type: "LineString",
+              name,
+              description,
+              extraRows,
+              style,
+              coords
+            });
+          }
+        });
+
+        Array.from(polyNodes).forEach(node => {
+          const rings = [];
+
+          const outerNodes = Array.from(node.getElementsByTagName("outerBoundaryIs"));
+          outerNodes.forEach(outer => {
+            const outerCoords = parseCoordinates(textOfFirst(outer, "coordinates"));
+            if (outerCoords.length >= 3) rings.push(outerCoords);
+          });
+
+          const innerNodes = Array.from(node.getElementsByTagName("innerBoundaryIs"));
+          innerNodes.forEach(inner => {
+            const innerCoords = parseCoordinates(textOfFirst(inner, "coordinates"));
+            if (innerCoords.length >= 3) rings.push(innerCoords);
+          });
+
+          if (rings.length) {
+            features.push({
+              type: "Polygon",
+              name,
+              description,
+              extraRows,
+              style,
+              rings
+            });
+          }
+        });
       });
 
-      pointNodes.forEach(node => {
-        const coordNode = node.getElementsByTagName("coordinates")[0];
-        if (!coordNode) return;
+      return features;
+    }
 
-        const coords = parseCoordinates(coordNode.textContent);
-        if (coords.length > 0) {
-          points.push(coords[0]);
+    /*******************************************************
+     * Route Drawing
+     *******************************************************/
+    function getLineStyle(feature) {
+      return kmlColorToCss(feature.style.lineColor, "#FFD400", 1);
+    }
+
+    function getIconStyle(feature) {
+      const rawColor =
+        feature.style.iconColor ||
+        feature.style.lineColor ||
+        feature.style.labelColor ||
+        "#ffff00";
+
+      const base = kmlColorToCss(rawColor, "#ffff00", 1);
+      const scale = Number(feature.style.iconScale || 1);
+
+      return {
+        color: base.color || "#ffff00",
+        opacity: Number.isFinite(base.opacity) ? base.opacity : 1,
+        scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
+        href: resolveIconUrl(feature.style.iconHref || "")
+      };
+    }
+
+    function getLabelColor(feature) {
+      const base = kmlColorToCss(feature.style.labelColor, "#ffffff", 1);
+      return base.color || "#ffffff";
+    }
+
+    function addWaypointLabel(marker, feature) {
+      if (!feature.name) return;
+
+      const labelColor = getLabelColor(feature);
+      const labelScale = Number(feature.style.labelScale || 1);
+      const fontSize = Math.max(9, Math.round(11 * labelScale));
+
+      marker.bindTooltip(
+        `<span style="color:${labelColor}; font-size:${fontSize}px;">${escapeHtml(feature.name)}</span>`,
+        {
+          permanent: true,
+          direction: "right",
+          offset: [8, 0],
+          className: "route-waypoint-label",
+          opacity: 1
         }
-      });
+      );
+    }
 
-      return { lines, points };
+    function drawKMLLine(feature, aircraft) {
+      const lineStyle = getLineStyle(feature);
+      const weight = feature.style.lineWidth || 4;
+      const latlngs = unwrapCoordSequence(feature.coords, ROUTE_REFERENCE_LON);
+
+      const line = L.polyline(latlngs, {
+        color: lineStyle.color,
+        weight: weight,
+        opacity: lineStyle.opacity
+      }).addTo(routeLayer);
+
+      if (feature.name || feature.description || feature.extraRows.length) {
+        line.bindPopup(
+          buildPopupHtml(
+            feature.name || aircraft + " Route",
+            feature.description || "",
+            feature.extraRows || []
+          ),
+          POPUP_OPTIONS
+        );
+      }
+
+      return line;
+    }
+
+    function drawKMLPoint(feature, aircraft, index, total) {
+      const popupHtml = buildPopupHtml(
+        feature.name || "Waypoint",
+        feature.description || "",
+        feature.extraRows || []
+      );
+
+      const latlng = toRenderLatLng(feature.coords.lat, feature.coords.lon);
+      const iconStyle = getIconStyle(feature);
+
+      let marker;
+
+      if (iconStyle.href) {
+        const iconSize = Math.max(10, Math.round(16 * iconStyle.scale));
+
+        const customIcon = L.icon({
+          iconUrl: iconStyle.href,
+          iconSize: [iconSize, iconSize],
+          iconAnchor: [iconSize / 2, iconSize / 2],
+          popupAnchor: [0, -10]
+        });
+
+        marker = L.marker(latlng, {
+          icon: customIcon,
+          zIndexOffset: 2000
+        }).addTo(routeLayer);
+      } else {
+        let fillColor = iconStyle.color || "#ffff00";
+
+        if (index === 0) fillColor = "#22c55e";
+        if (index === total - 1) fillColor = "#3b82f6";
+
+        marker = L.circleMarker(latlng, {
+          radius: Math.max(3, 4 * iconStyle.scale),
+          color: "#111827",
+          weight: 1,
+          fillColor: fillColor,
+          fillOpacity: iconStyle.opacity
+        }).addTo(routeLayer);
+      }
+
+      marker.bindPopup(popupHtml, POPUP_OPTIONS);
+      addWaypointLabel(marker, feature);
+
+      return marker;
+    }
+
+    function drawKMLPolygon(feature, aircraft) {
+      const lineStyle = kmlColorToCss(feature.style.lineColor, "#00aa55", 0.9);
+      const fillStyle = kmlColorToCss(feature.style.polyColor, "#00CC66", 0.25);
+
+      const rings = feature.rings.map(ring => unwrapCoordSequence(ring, ROUTE_REFERENCE_LON));
+
+      const polygon = L.polygon(rings, {
+        color: lineStyle.color,
+        opacity: feature.style.outline === false ? 0 : lineStyle.opacity,
+        weight: feature.style.outline === false ? 0 : (feature.style.lineWidth || 2),
+        fillColor: fillStyle.color,
+        fillOpacity: feature.style.fill === false ? 0 : fillStyle.opacity
+      }).addTo(routeLayer);
+
+      if (feature.name || feature.description || feature.extraRows.length) {
+        polygon.bindPopup(
+          buildPopupHtml(
+            feature.name || aircraft + " Polygon",
+            feature.description || "",
+            feature.extraRows || []
+          ),
+          POPUP_OPTIONS
+        );
+      }
+
+      return polygon;
     }
 
     function getRouteKmlUrl(aircraft) {
@@ -492,63 +1085,31 @@
         }
 
         const kmlText = await res.text();
-        const route = parseKmlRoute(kmlText);
+        const features = extractKMLFeatures(kmlText);
 
-        if (!route.lines.length && !route.points.length) {
-          throw new Error("KML 안에 유효한 LineString 또는 Point가 없습니다.");
+        if (!features.length) {
+          throw new Error("KML 안에 유효한 feature가 없습니다.");
         }
 
-        const boundsGroup = L.featureGroup();
+        const lineFeatures = features.filter(f => f.type === "LineString");
+        const pointFeatures = features.filter(f => f.type === "Point");
+        const polygonFeatures = features.filter(f => f.type === "Polygon");
 
-        route.lines.forEach((lineCoords, idx) => {
-          const latlngs = lineCoords.map(p => [p.lat, p.lon]);
+        lineFeatures.forEach(f => drawKMLLine(f, aircraft));
+        polygonFeatures.forEach(f => drawKMLPolygon(f, aircraft));
 
-          const line = L.polyline(latlngs, {
-            color: "#ffd400",
-            weight: 5,
-            opacity: 0.95
-          }).addTo(routeLayer);
-
-          line.bindPopup(
-            "<b>" + aircraft + "</b><br>" +
-            "Route Line " + (idx + 1)
-          );
-
-          boundsGroup.addLayer(line);
+        pointFeatures.forEach((f, idx) => {
+          drawKMLPoint(f, aircraft, idx, pointFeatures.length);
         });
 
-        route.points.forEach((p, idx) => {
-          let fillColor = "#ffffff";
-
-          if (idx === 0) fillColor = "#22c55e";
-          if (idx === route.points.length - 1) fillColor = "#3b82f6";
-
-          const marker = L.circleMarker([p.lat, p.lon], {
-            radius: 4,
-            color: "#111827",
-            weight: 1,
-            fillColor: fillColor,
-            fillOpacity: 1
-          }).addTo(routeLayer);
-
-          marker.bindPopup(
-            "<b>" + aircraft + "</b><br>" +
-            "Route Point " + (idx + 1)
-          );
-
-          boundsGroup.addLayer(marker);
-        });
-
-        if (boundsGroup.getBounds().isValid()) {
-          map.fitBounds(boundsGroup.getBounds(), {
-            padding: [30, 30],
-            maxZoom: 7
-          });
-        }
+        // Route 로딩 후 전체 Route 기준으로 줌아웃하지 않음.
+        // ARTCC 앱 목적상 미국 관제구역 중심 유지.
+        map.setView([39.5, -98.5], 4);
 
         document.getElementById("routeStatus").textContent =
           aircraft + " Route 표시 완료 / Lines: " +
-          route.lines.length + " / Points: " + route.points.length;
+          lineFeatures.length + " / Points: " + pointFeatures.length +
+          " / Polygons: " + polygonFeatures.length;
 
       } catch (err) {
         console.error(err);
@@ -575,7 +1136,16 @@
       }
     }
 
-    document.getElementById("dateInput").addEventListener("change", updateFaaLink);
+    /*******************************************************
+     * Init
+     *******************************************************/
+    document.getElementById("dateInput").addEventListener("change", function () {
+      updateFaaLink();
+
+      if (selectedIdent) {
+        loadAdvisoriesForFacility(selectedIdent);
+      }
+    });
 
     updateFaaLink();
 
