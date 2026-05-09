@@ -879,6 +879,17 @@
       updateFaaLink();
       loadAdvisoriesForFacility(ident);
     }
+    function clearSelectedArtcc() {
+  selectedLayer = null;
+  selectedIdent = "";
+
+  document.getElementById("selectedArtcc").textContent = "-";
+  document.getElementById("selectedName").textContent = "-";
+  document.getElementById("advisoryBox").innerHTML = "ARTCC를 클릭하면 FAA Advisory 조회.";
+
+  updateArtccAdvisoryColors();
+  updateFaaLink();
+}
 
     async function loadArtccGeojson() {
       const res = await fetch("artcc.geojson?v=" + Date.now(), {
@@ -917,9 +928,10 @@
             "Click area to select."
           );
 
-          layer.on("click", function () {
-            selectArtcc(layer, feature);
-          });
+      layer.on("click", function (e) {
+  L.DomEvent.stopPropagation(e);
+  selectArtcc(layer, feature);
+});
 
           layer.on("mouseover", function () {
             if (ident !== selectedIdent) {
@@ -1409,6 +1421,11 @@
       }
     }
 
+    map.on("click", function () {
+  if (selectedIdent) {
+    clearSelectedArtcc();
+  }
+});
     /*******************************************************
      * Init
      *******************************************************/
@@ -1432,6 +1449,8 @@
         console.error(err);
         alert("ARTCC GeoJSON 로드 실패: " + err.message);
       });
+
+
   </script>
 </body>
 </html>
