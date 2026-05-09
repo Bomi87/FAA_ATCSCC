@@ -267,11 +267,35 @@
       vertical-align: top;
     }
 
-    .popup-section td:first-child {
-      font-weight: 600;
-      white-space: nowrap;
-      width: 1%;
-    }
+  .popup-section td:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+  width: 1%;
+}
+
+.leaflet-control-ndb-airport {
+  background: #111827;
+  border-radius: 8px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.leaflet-control-ndb-airport button {
+  min-width: 54px;
+  height: 38px;
+  border: none;
+  background: #111827;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.leaflet-control-ndb-airport button:hover {
+  background: #374151;
+}
+
 .mobile-panel-buttons {
   display: none;
 }
@@ -460,6 +484,7 @@
      * Config
      *******************************************************/
     const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
+    const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
     const FAA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxJHTvujHAaWbSBO0Z5lEvShfSAIKuNi4jeKrQCm7D3dy9Au8uaix0aPhzV9g43ojOFhw/exec";
 
     const ROUTE_REFERENCE_LON = -100;
@@ -492,18 +517,35 @@ const map = L.map("map", {
         attribution: "Tiles &copy; Esri"
       }
     );
+function createNdbAirportButton() {
+  const control = L.control({ position: "bottomright" });
 
-    L.control.layers(
-      {
-        "Street Map": streetMap,
-        "Satellite": satelliteMap
-      },
-      null,
-      {
-        position: "bottomright",
-        collapsed: true
-      }
-    ).addTo(map);
+  control.onAdd = function () {
+    const container = L.DomUtil.create("div", "leaflet-control leaflet-control-ndb-airport");
+    const button = L.DomUtil.create("button", "", container);
+
+    button.type = "button";
+    button.textContent = "NDB";
+    button.title = "NDB Airport";
+
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+
+    L.DomEvent.on(button, "click", function (e) {
+      L.DomEvent.stop(e);
+
+      // 여기에 NDB 공항 표시 기능 연결
+      // 예: toggleNdbAirports();
+      alert("NDB Airport 기능 연결 예정");
+    });
+
+    return container;
+  };
+
+  return control;
+}
+
+createNdbAirportButton().addTo(map);
 
     const artccGroup = L.featureGroup().addTo(map);
     const routeLayer = L.featureGroup().addTo(map);
