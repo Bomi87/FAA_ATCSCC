@@ -274,27 +274,45 @@
 }
 
 .leaflet-control-ndb-airport {
-  background: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ndb-search-input {
+  width: 58px;
+  height: 30px;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  box-shadow: 0 1px 5px rgba(0,0,0,0.35);
-  overflow: hidden;
+  background: #ffffff;
+  color: #111827;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.25);
 }
 
 .leaflet-control-ndb-airport button {
-  min-width: 54px;
-  height: 38px;
+  min-width: 58px;
+  height: 36px;
   border: none;
+  border-radius: 8px;
   background: #111827;
   color: #ffffff;
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
   padding: 0 10px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.35);
 }
 
 .leaflet-control-ndb-airport button:hover {
   background: #374151;
 }
+
 .leaflet-control-ndb-airport button.active {
   background: #16a34a;
 }
@@ -549,14 +567,20 @@ const ndbLayer = L.featureGroup();
 
 let ndbVisible = false;
 let ndbLoaded = false;
+let ndbMarkers = [];
 
 function createNdbAirportButton() {
   const control = L.control({ position: "bottomright" });
 
   control.onAdd = function () {
     const container = L.DomUtil.create("div", "leaflet-control leaflet-control-ndb-airport");
-    const button = L.DomUtil.create("button", "", container);
 
+    const input = L.DomUtil.create("input", "ndb-search-input", container);
+    input.type = "text";
+    input.placeholder = "ICAO";
+    input.maxLength = 4;
+
+    const button = L.DomUtil.create("button", "", container);
     button.type = "button";
     button.textContent = "NDB";
     button.title = "Show / Hide NDB Airports";
@@ -564,9 +588,33 @@ function createNdbAirportButton() {
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
 
+    input.addEventListener("input", function () {
+      input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+      if (ndbLoaded && ndbVisible) {
+        filterNdbAirports(input.value);
+      }
+    });
+
+    input.addEventListener("keydown", async function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+
+        if (!ndbLoaded || !ndbVisible) {
+          await toggleNdbAirports(button);
+        }
+
+        filterNdbAirports(input.value);
+      }
+    });
+
     L.DomEvent.on(button, "click", async function (e) {
       L.DomEvent.stop(e);
       await toggleNdbAirports(button);
+
+      if (ndbVisible) {
+        filterNdbAirports(input.value);
+      }
     });
 
     return container;
@@ -921,11 +969,11 @@ buildFacilityAdvisoryMap();
       box.innerHTML = airports.map(ap => {
         const list = airportAdvisoryMap[ap] || [];
      const advNums = list.map(a => {
-  const firCodes = Array.from(new Set(
-    (a.controlFacilityCodes || [])
-      .map(code => String(code || "").toUpperCase())
-      .filter(code => /^Z[A-Z]{2}$/.test(code))
-  )).join("/");
+const firCodes = Array.from(new Set(
+  (a.facilityCodes || [])
+    .map(code => String(code || "").toUpperCase())
+    .filter(code => /^Z[A-Z]{2}$/.test(code))
+)).join("/");
 
   return "ADVZY " + a.advn + (firCodes ? "(" + firCodes + ")" : "");
 }).join(", ");
@@ -1668,15 +1716,28 @@ async function loadNdbAirports() {
     .filter(f => f.type === "Point" && f.coords);
 
   ndbLayer.clearLayers();
+  ndbMarkers = [];
 
   features.forEach(f => {
-    drawNdbAirportPoint(f);
+    const marker = drawNdbAirportPoint(f);
+    ndbMarkers.push(marker);
   });
 }
+function filterNdbAirports(searchCode) {
+  const code = String(searchCode || "").trim().toUpperCase();
 
+  ndbLayer.clearLayers();
+
+  ndbMarkers.forEach(marker => {
+    const name = String(marker._ndbName || "").toUpperCase();
+
+    if (!code || name.includes(code)) {
+      marker.addTo(ndbLayer);
+    }
+  });
+}
 function drawNdbAirportPoint(feature) {
   const latlng = toRenderLatLng(feature.coords.lat, feature.coords.lon);
-
   const name = feature.name || "NDB Airport";
 
   const marker = L.circleMarker(latlng, {
@@ -1685,7 +1746,9 @@ function drawNdbAirportPoint(feature) {
     weight: 1,
     fillColor: "#06b6d4",
     fillOpacity: 0.95
-  }).addTo(ndbLayer);
+  });
+
+  marker._ndbName = name;
 
   marker.bindPopup(
     buildPopupHtml(
@@ -1696,14 +1759,15 @@ function drawNdbAirportPoint(feature) {
     POPUP_OPTIONS
   );
 
-marker.bindTooltip(escapeHtml(name), {
-  permanent: true,
-  direction: "right",
-  offset: [-4, 0],
-  className: "ndb-label",
-  opacity: 1
-});
+  marker.bindTooltip(escapeHtml(name), {
+    permanent: true,
+    direction: "right",
+    offset: [-4, 0],
+    className: "ndb-label",
+    opacity: 1
+  });
 
+  marker.addTo(ndbLayer);
   return marker;
 }
     function drawKMLPolygon(feature, aircraft) {
