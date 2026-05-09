@@ -323,7 +323,10 @@ html, body {
 .ndb-fixed-control button.active {
   background: #16a34a;
 }
-
+.airport-artcc {
+  color: #2563eb;
+  font-weight: 700;
+}
 .ndb-label {
   background: transparent !important;
   border: none !important;
@@ -974,22 +977,28 @@ buildFacilityAdvisoryMap();
 
       box.innerHTML = airports.map(ap => {
         const list = airportAdvisoryMap[ap] || [];
-     const advNums = list.map(a => {
-const firCodes = Array.from(new Set(
-  (a.facilityCodes || [])
-    .map(code => String(code || "").toUpperCase())
-    .filter(code => /^Z[A-Z]{2}$/.test(code))
-)).join("/");
+  const advNums = list.map(a => {
+  const firCodes = Array.from(new Set(
+    (a.facilityCodes || [])
+      .map(code => String(code || "").toUpperCase())
+      .filter(code => /^Z[A-Z]{2}$/.test(code))
+  )).join("/");
+
+  return "ADVZY " + escapeHtml(a.advn) +
+    (firCodes
+      ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
+      : "");
+}).join(", ");
 
   return "ADVZY " + a.advn + (firCodes ? "(" + firCodes + ")" : "");
 }).join(", ");
 
-        return `
-          <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
-            <b>${escapeHtml(ap)}</b><br>
-            <span style="color:#6b7280;">${escapeHtml(advNums)}</span>
-          </div>
-        `;
+   return `
+  <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
+    <b>${escapeHtml(ap)}</b><br>
+    <span style="color:#6b7280;">${advNums}</span>
+  </div>
+`;
       }).join("");
     }
 
