@@ -310,14 +310,19 @@
   .top-panel,
   .right-panel {
     display: none;
-    top: 48px;
+    top: 52px;
     left: 8px;
-    right: 8px;
-    width: auto;
+    right: auto;
+
+    width: calc((100vw - 16px) / 0.92);
     max-width: none;
-    max-height: calc(100vh - 64px);
+    max-height: calc((100vh - 72px) / 0.92);
+
     padding: 10px;
-    font-size: 11px;
+    font-size: 10.2px;
+
+    transform: scale(0.92);
+    transform-origin: top left;
   }
 
   .top-panel.mobile-open,
@@ -326,8 +331,9 @@
   }
 
   .selected-box {
-    padding: 7px;
-    margin-top: 7px;
+    padding: 6px;
+    margin-top: 6px;
+    line-height: 1.35;
   }
 
   .route-btn-row {
@@ -335,30 +341,44 @@
   }
 
   .route-btn {
-    padding: 7px 4px;
-    font-size: 11px;
+    padding: 6px 4px;
+    font-size: 10.5px;
   }
 
   .clear-btn {
     padding: 6px 4px;
+    font-size: 10.5px;
   }
 
   .btn {
     padding: 7px;
-    font-size: 11px;
-  }
-
-  .title {
-    font-size: 13px;
-    margin-bottom: 8px;
-  }
-
-  .advisory-box {
     font-size: 10.5px;
   }
 
+  .title {
+    font-size: 12.5px;
+    margin-bottom: 7px;
+  }
+
+  .advisory-box {
+    font-size: 10px;
+    line-height: 1.38;
+  }
+
+  .advisory-item {
+    padding: 6px 0;
+  }
+
   .airport-item {
-    font-size: 11px;
+    font-size: 10.5px;
+    line-height: 1.38;
+    padding: 6px 0;
+  }
+
+  .detail-text {
+    font-size: 10px;
+    line-height: 1.38;
+    max-height: 260px;
   }
 
   .artcc-label {
