@@ -1017,10 +1017,12 @@
         }).addTo(routeLayer);
       }
 
-      marker.bindPopup(popupHtml, POPUP_OPTIONS);
-      addWaypointLabel(marker, feature);
+marker.bindPopup(popupHtml, POPUP_OPTIONS);
 
-      return marker;
+// Waypoint 이름 라벨은 표시하지 않음
+// addWaypointLabel(marker, feature);
+
+return marker;
     }
 
     function drawKMLPolygon(feature, aircraft) {
