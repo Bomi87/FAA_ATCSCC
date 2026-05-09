@@ -322,7 +322,7 @@
       Open FAA Full List
     </a>
 
-    <div id="routeStatus" class="status">Route 미선택</div>
+<div id="routeStatus" class="status">Times in UTC</div>
     <div id="advisoryBox" class="advisory-box">ARTCC를 클릭하면 FAA Advisory 조회.</div>
 
 
@@ -1346,7 +1346,7 @@ function updateFaaLink() {
       try {
         currentRouteName = aircraft;
         document.getElementById("selectedRoute").textContent = aircraft;
-        document.getElementById("routeStatus").textContent = aircraft + " Route 로딩 중...";
+       document.getElementById("routeStatus").textContent = "Times in UTC";
         setActiveRouteButton(aircraft);
 
         routeLayer.clearLayers();
@@ -1378,10 +1378,7 @@ function updateFaaLink() {
 
         map.setView([39.5, -98.5], 4);
 
-        document.getElementById("routeStatus").textContent =
-          aircraft + " Route 표시 완료 / Lines: " +
-          lineFeatures.length + " / Points: " + pointFeatures.length +
-          " / Polygons: " + polygonFeatures.length;
+    document.getElementById("routeStatus").textContent = "Times in UTC";
 
       } catch (err) {
         console.error(err);
@@ -1394,7 +1391,7 @@ function updateFaaLink() {
       routeLayer.clearLayers();
       currentRouteName = "";
       document.getElementById("selectedRoute").textContent = "-";
-      document.getElementById("routeStatus").textContent = "Route 미선택";
+    document.getElementById("routeStatus").textContent = "Times in UTC";
       document.getElementById("btnHL8080").classList.remove("active");
       document.getElementById("btnHL8372").classList.remove("active");
     }
