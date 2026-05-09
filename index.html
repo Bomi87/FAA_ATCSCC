@@ -1660,6 +1660,9 @@ loadArtccGeojson()
   .then(() => {
     loadAllAdvisoriesForDate();
     autoLoadRouteFromUrl();
+    if (window.innerWidth <= 767) {
+  showMobilePanel("airports");
+}
   })
       .catch(err => {
         console.error(err);
