@@ -851,13 +851,12 @@ buildFacilityAdvisoryMap();
 
       box.innerHTML = airports.map(ap => {
         const list = airportAdvisoryMap[ap] || [];
-       const advNums = list.map(a => {
-  const firCodes = Array.from(new Set([
-    ...(a.controlFacilityCodes || []),
-    ...(a.facilityCodes || [])
-  ]))
-    .filter(code => /^Z[A-Z]{2}$/.test(String(code || "").toUpperCase()))
-    .join("/");
+     const advNums = list.map(a => {
+  const firCodes = Array.from(new Set(
+    (a.controlFacilityCodes || [])
+      .map(code => String(code || "").toUpperCase())
+      .filter(code => /^Z[A-Z]{2}$/.test(code))
+  )).join("/");
 
   return "ADVZY " + a.advn + (firCodes ? "(" + firCodes + ")" : "");
 }).join(", ");
