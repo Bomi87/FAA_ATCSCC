@@ -590,24 +590,22 @@ let ndbLoaded = false;
 let ndbMarkers = [];
 
 
-    function fixMobileViewportAfterKeyboard() {
+function fixMobileViewportAfterKeyboard() {
   if (window.innerWidth > 767) return;
 
-  setTimeout(() => {
+  const reset = () => {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
     window.scrollTo(0, 0);
 
     if (map && map.invalidateSize) {
-      map.invalidateSize();
+      map.invalidateSize(true);
     }
-  }, 250);
+  };
 
-  setTimeout(() => {
-    window.scrollTo(0, 0);
-
-    if (map && map.invalidateSize) {
-      map.invalidateSize();
-    }
-  }, 700);
+  setTimeout(reset, 100);
+  setTimeout(reset, 350);
+  setTimeout(reset, 800);
 }
 function createNdbAirportButton() {
   const control = L.control({ position: "bottomright" });
