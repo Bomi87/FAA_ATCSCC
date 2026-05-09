@@ -910,11 +910,10 @@ function updateFaaLink() {
             opacity: 1
           });
 
-          layer.bindPopup(
-            "<b>" + escapeHtml(ident) + "</b><br>" +
-            escapeHtml(name) + "<br><br>" +
-            "Click area to select."
-          );
+   layer.bindPopup(
+  "<b>" + escapeHtml(ident) + "</b><br>" +
+  escapeHtml(name)
+);
 
       layer.on("click", function (e) {
   L.DomEvent.stopPropagation(e);
