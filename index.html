@@ -965,42 +965,40 @@ buildFacilityAdvisoryMap();
       });
     }
 
-    function renderAirportRestrictionList() {
-      const box = document.getElementById("airportRestrictionList");
+   function renderAirportRestrictionList() {
+  const box = document.getElementById("airportRestrictionList");
 
-      const airports = Object.keys(airportAdvisoryMap).sort();
+  const airports = Object.keys(airportAdvisoryMap).sort();
 
-      if (!airports.length) {
-        box.innerHTML = "영향 공항 없음";
-        return;
-      }
+  if (!airports.length) {
+    box.innerHTML = "영향 공항 없음";
+    return;
+  }
 
-      box.innerHTML = airports.map(ap => {
-        const list = airportAdvisoryMap[ap] || [];
-  const advNums = list.map(a => {
-  const firCodes = Array.from(new Set(
-    (a.facilityCodes || [])
-      .map(code => String(code || "").toUpperCase())
-      .filter(code => /^Z[A-Z]{2}$/.test(code))
-  )).join("/");
+  box.innerHTML = airports.map(ap => {
+    const list = airportAdvisoryMap[ap] || [];
 
-  return "ADVZY " + escapeHtml(a.advn) +
-    (firCodes
-      ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
-      : "");
-}).join(", ");
+    const advNums = list.map(a => {
+      const firCodes = Array.from(new Set(
+        (a.facilityCodes || [])
+          .map(code => String(code || "").toUpperCase())
+          .filter(code => /^Z[A-Z]{2}$/.test(code))
+      )).join("/");
 
-  return "ADVZY " + a.advn + (firCodes ? "(" + firCodes + ")" : "");
-}).join(", ");
+      return "ADVZY " + escapeHtml(a.advn) +
+        (firCodes
+          ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
+          : "");
+    }).join(", ");
 
-   return `
-  <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
-    <b>${escapeHtml(ap)}</b><br>
-    <span style="color:#6b7280;">${advNums}</span>
-  </div>
-`;
-      }).join("");
-    }
+    return `
+      <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
+        <b>${escapeHtml(ap)}</b><br>
+        <span style="color:#6b7280;">${advNums}</span>
+      </div>
+    `;
+  }).join("");
+}
 
     function showAirportAdvisories(airportCode) {
       const ap = String(airportCode || "").toUpperCase();
