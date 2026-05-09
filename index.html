@@ -347,16 +347,16 @@ html, body {
 }
 
 @media (max-width: 767px) {
-  .mobile-panel-buttons {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    z-index: 1200;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 6px;
-  }
+ .mobile-panel-buttons {
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top) + 8px) !important;
+  left: 8px !important;
+  right: 8px !important;
+  z-index: 2500 !important;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
 
   .mobile-panel-buttons button {
     border: none;
@@ -596,21 +596,29 @@ let ndbMarkers = [];
 function fixMobileViewportAfterKeyboard() {
   if (window.innerWidth > 767) return;
 
-  const reset = () => {
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    window.scrollTo(0, 0);
+ const reset = () => {
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  window.scrollTo(0, 0);
 
-    if (map && map.invalidateSize) {
-      map.invalidateSize(true);
-    }
-  };
+  const mobileButtons = document.querySelector(".mobile-panel-buttons");
+  if (mobileButtons) {
+    mobileButtons.style.position = "fixed";
+    mobileButtons.style.top = "calc(env(safe-area-inset-top) + 8px)";
+    mobileButtons.style.left = "8px";
+    mobileButtons.style.right = "8px";
+    mobileButtons.style.zIndex = "2500";
+  }
 
-  setTimeout(reset, 100);
-  setTimeout(reset, 350);
-  setTimeout(reset, 800);
-}
+  if (map && map.invalidateSize) {
+    map.invalidateSize(true);
+  }
+};
 
+setTimeout(reset, 100);
+setTimeout(reset, 350);
+setTimeout(reset, 800);
+setTimeout(reset, 1200);
 
     let selectedLayer = null;
     let selectedIdent = "";
