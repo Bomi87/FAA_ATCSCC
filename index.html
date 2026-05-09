@@ -316,9 +316,7 @@
       Route: <b id="selectedRoute">-</b>
     </div>
 
-    <button id="faaListLink" class="btn" type="button" onclick="refreshSelectedAdvisory()">
-      Select ARTCC First
-    </button>
+
 
     <a id="faaFullListLink" class="btn secondary-btn" href="#" target="_blank">
       Open FAA Full List
@@ -567,28 +565,14 @@ let isAdvisoryDetailOpen = false;
       );
     }
 
-    function updateFaaLink() {
-      const btn = document.getElementById("faaListLink");
-      const fullLink = document.getElementById("faaFullListLink");
-      const date = getDateValue();
+function updateFaaLink() {
+  const fullLink = document.getElementById("faaFullListLink");
+  const date = getDateValue();
 
-      fullLink.href = buildFaaAdvisoryListUrl(date);
+  fullLink.href = buildFaaAdvisoryListUrl(date);
+}
 
-      if (selectedIdent) {
-        btn.textContent = "Refresh Advisory - " + selectedIdent;
-      } else {
-        btn.textContent = "Select ARTCC First";
-      }
-    }
-
-    function refreshSelectedAdvisory() {
-      if (!selectedIdent) {
-        document.getElementById("advisoryBox").innerHTML = "먼저 ARTCC 구역을 클릭하세요.";
-        return;
-      }
-
-      loadAdvisoriesForFacility(selectedIdent);
-    }
+  
 
     async function loadAllAdvisoriesForDate() {
       const date = getDateValue();
