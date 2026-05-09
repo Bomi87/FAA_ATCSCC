@@ -428,12 +428,16 @@
   }
   
 
-  input {
-    padding: 5px 6px;
-    font-size: 10px;
-  }
-  .ndb-search-input {
-  font-size: 16px;
+input {
+  padding: 5px 6px;
+  font-size: 10px;
+}
+
+.ndb-search-input {
+  font-size: 16px !important;
+  width: 66px;
+  height: 32px;
+  padding: 0 6px;
 }
 
 .advisory-box {
@@ -572,6 +576,26 @@ let ndbVisible = false;
 let ndbLoaded = false;
 let ndbMarkers = [];
 
+
+    function fixMobileViewportAfterKeyboard() {
+  if (window.innerWidth > 767) return;
+
+  setTimeout(() => {
+    window.scrollTo(0, 0);
+
+    if (map && map.invalidateSize) {
+      map.invalidateSize();
+    }
+  }, 250);
+
+  setTimeout(() => {
+    window.scrollTo(0, 0);
+
+    if (map && map.invalidateSize) {
+      map.invalidateSize();
+    }
+  }, 700);
+}
 function createNdbAirportButton() {
   const control = L.control({ position: "bottomright" });
 
@@ -598,18 +622,24 @@ function createNdbAirportButton() {
         filterNdbAirports(input.value);
       }
     });
+    input.addEventListener("blur", function () {
+  fixMobileViewportAfterKeyboard();
+});
 
-    input.addEventListener("keydown", async function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
+input.addEventListener("keydown", async function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
 
-        if (!ndbLoaded || !ndbVisible) {
-          await toggleNdbAirports(button);
-        }
+    if (!ndbLoaded || !ndbVisible) {
+      await toggleNdbAirports(button);
+    }
 
-        filterNdbAirports(input.value);
-      }
-    });
+    filterNdbAirports(input.value);
+
+    input.blur();
+    fixMobileViewportAfterKeyboard();
+  }
+});
 
     L.DomEvent.on(button, "click", async function (e) {
       L.DomEvent.stop(e);
@@ -1916,11 +1946,17 @@ function hideMobilePanels() {
   if (topPanel) topPanel.classList.remove("mobile-open");
   if (rightPanel) rightPanel.classList.remove("mobile-open");
 }         
-    map.on("click", function () {
+map.on("click", function () {
   if (selectedIdent) {
     clearSelectedArtcc();
   }
 });
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", function () {
+    fixMobileViewportAfterKeyboard();
+  });
+}
     /*******************************************************
      * Init
      *******************************************************/
