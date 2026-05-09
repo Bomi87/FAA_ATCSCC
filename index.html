@@ -39,6 +39,22 @@
       font-size: 12px;
     }
 
+    .right-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 1000;
+      width: 320px;
+      max-width: calc(100vw - 24px);
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      background: rgba(255,255,255,0.96);
+      border-radius: 12px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.25);
+      padding: 12px;
+      font-size: 12px;
+    }
+
     .title {
       font-size: 15px;
       font-weight: 700;
@@ -138,6 +154,14 @@
       background: #1d4ed8;
     }
 
+    .secondary-btn {
+      background: #64748b;
+    }
+
+    .secondary-btn:hover {
+      background: #475569;
+    }
+
     .status {
       margin-top: 8px;
       font-size: 11px;
@@ -156,6 +180,38 @@
       padding: 7px 0;
     }
 
+    .airport-item {
+      border-top: 1px solid #e5e7eb;
+      padding: 7px 0;
+      cursor: pointer;
+      line-height: 1.45;
+    }
+
+    .airport-item:hover {
+      background: #f3f4f6;
+    }
+
+    .highlight-code {
+      background: #fde047;
+      color: #111827;
+      font-weight: 800;
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
+
+    .detail-text {
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 6px;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
     .hint {
       color: #6b7280;
       font-size: 11px;
@@ -169,21 +225,6 @@
       box-shadow: none !important;
       color: #ffffff;
       font-size: 12px;
-      font-weight: 700;
-      text-shadow:
-        -1px -1px 0 #000,
-         1px -1px 0 #000,
-        -1px  1px 0 #000,
-         1px  1px 0 #000,
-         0 0 4px rgba(0,0,0,0.8);
-    }
-
-    .route-waypoint-label {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-      color: #ffffff;
-      font-size: 11px;
       font-weight: 700;
       text-shadow:
         -1px -1px 0 #000,
@@ -238,16 +279,16 @@
         font-size: 11px;
       }
 
+      .right-panel {
+        display: none;
+      }
+
       .title {
         font-size: 14px;
       }
 
       .artcc-label {
         font-size: 10px;
-      }
-
-      .route-waypoint-label {
-        font-size: 9px;
       }
     }
   </style>
@@ -275,15 +316,28 @@
       Route: <b id="selectedRoute">-</b>
     </div>
 
-    <a id="faaListLink" class="btn" href="#" target="_blank">
-      Open FAA Advisory List
+    <button id="faaListLink" class="btn" type="button" onclick="refreshSelectedAdvisory()">
+      Select ARTCC First
+    </button>
+
+    <a id="faaFullListLink" class="btn secondary-btn" href="#" target="_blank">
+      Open FAA Full List
     </a>
 
     <div id="routeStatus" class="status">Route 미선택</div>
     <div id="advisoryBox" class="advisory-box">ARTCC를 클릭하면 FAA Advisory 조회.</div>
 
     <div class="hint">
-      Route는 기존 FLIGHT_MAP의 KML을 불러오고, KML Style / Name / Description / ExtendedData를 최대한 유지해서 표시함.
+      주황색 ARTCC = 해당 날짜 Advisory 있음.<br>
+      빨간색 ARTCC = 현재 선택 구역.<br>
+      오른쪽 리스트 클릭 시 앱 내부에서 관련 코드가 하이라이트됨.
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="title">Restricted / Advisory List</div>
+    <div id="airportRestrictionList">
+      날짜별 Advisory 조회 중...
     </div>
   </div>
 
@@ -294,11 +348,8 @@
      * Config
      *******************************************************/
     const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
-    const FAA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxG53py2iWVaMN0NL60lJIlqdaFdKKmyhzEG9yjvvQ6Jb5MJ0jLaZH4HK3ZYY_YTXlydg/exec";
+    const FAA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxMRC9kLGP9ZyHLnp6ib5LDjZcNYort-22iokpfYSlFif8mHBA99kdvkZXKAg80OgTWbQ/exec";
 
-    // FAA ARTCC 앱에서는 미국 관제구역과 맞추기 위해 경도 기준을 미국 쪽으로 둠.
-    // 한국/일본 쪽 좌표는 -234 같은 식으로 왼쪽 world copy에 배치되고,
-    // 미국 구간은 -170~-70 부근에 유지됨.
     const ROUTE_REFERENCE_LON = -100;
 
     const POPUP_OPTIONS = {
@@ -349,6 +400,10 @@
     let selectedLayer = null;
     let selectedIdent = "";
     let currentRouteName = "";
+
+    let allAdvisoriesCache = [];
+    let artccLayerIndex = {};
+    let facilityAdvisoryMap = {};
 
     /*******************************************************
      * Basic Utils
@@ -412,6 +467,29 @@
     }
 
     /*******************************************************
+     * Highlight
+     *******************************************************/
+    function highlightTerms(text, terms) {
+      let html = escapeHtml(text || "");
+
+      const cleanTerms = Array.from(new Set((terms || [])
+        .map(t => String(t || "").trim().toUpperCase())
+        .filter(Boolean)
+      ));
+
+      cleanTerms.forEach(term => {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const re = new RegExp("(^|[^A-Z0-9])(" + escaped + ")([^A-Z0-9]|$)", "gi");
+
+        html = html.replace(re, function(match, p1, p2, p3) {
+          return p1 + "<span class='highlight-code'>" + p2 + "</span>" + p3;
+        });
+      });
+
+      return html;
+    }
+
+    /*******************************************************
      * Anti-Meridian Helpers
      *******************************************************/
     function wrapLon180(lon) {
@@ -465,7 +543,7 @@
     }
 
     /*******************************************************
-     * FAA Advisory Link / Apps Script
+     * FAA Advisory
      *******************************************************/
     function getDateValue() {
       return document.getElementById("dateInput").value || "2026-05-08";
@@ -487,22 +565,123 @@
     }
 
     function updateFaaLink() {
+      const btn = document.getElementById("faaListLink");
+      const fullLink = document.getElementById("faaFullListLink");
       const date = getDateValue();
-      const link = document.getElementById("faaListLink");
-      link.href = buildFaaAdvisoryListUrl(date);
+
+      fullLink.href = buildFaaAdvisoryListUrl(date);
 
       if (selectedIdent) {
-        link.textContent = "Open FAA List - " + selectedIdent;
+        btn.textContent = "Refresh Advisory - " + selectedIdent;
       } else {
-        link.textContent = "Open FAA Advisory List";
+        btn.textContent = "Select ARTCC First";
       }
+    }
+
+    function refreshSelectedAdvisory() {
+      if (!selectedIdent) {
+        document.getElementById("advisoryBox").innerHTML = "먼저 ARTCC 구역을 클릭하세요.";
+        return;
+      }
+
+      loadAdvisoriesForFacility(selectedIdent);
+    }
+
+    async function loadAllAdvisoriesForDate() {
+      const date = getDateValue();
+      const box = document.getElementById("airportRestrictionList");
+
+      if (!FAA_APPS_SCRIPT_URL || FAA_APPS_SCRIPT_URL.includes("여기에_")) {
+        box.innerHTML = "Apps Script URL 미설정.";
+        return;
+      }
+
+      box.innerHTML = "Advisory 전체 조회 중...";
+
+      const url =
+        FAA_APPS_SCRIPT_URL +
+        "?date=" + encodeURIComponent(date) +
+        "&includeDetails=true";
+
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json();
+
+        if (!data.ok) {
+          throw new Error(data.error || "Apps Script error");
+        }
+
+        allAdvisoriesCache = data.advisories || [];
+
+        buildFacilityAdvisoryMap();
+        updateArtccAdvisoryColors();
+        renderAirportRestrictionList();
+
+      } catch (err) {
+        console.error(err);
+        box.innerHTML = "Advisory 전체 조회 실패: " + escapeHtml(err.message);
+      }
+    }
+
+    function buildFacilityAdvisoryMap() {
+      facilityAdvisoryMap = {};
+
+      allAdvisoriesCache.forEach(a => {
+        (a.facilityCodes || []).forEach(code => {
+          if (!facilityAdvisoryMap[code]) {
+            facilityAdvisoryMap[code] = [];
+          }
+          facilityAdvisoryMap[code].push(a);
+        });
+      });
+    }
+
+    function updateArtccAdvisoryColors() {
+      Object.keys(artccLayerIndex).forEach(code => {
+        const layer = artccLayerIndex[code];
+        if (!layer || !layer.setStyle) return;
+
+        if (selectedIdent && code === selectedIdent) {
+          layer.setStyle(getArtccStyle("selected"));
+          return;
+        }
+
+        if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) {
+          layer.setStyle(getArtccStyle("hasAdvisory"));
+        } else {
+          layer.setStyle(getArtccStyle("normal"));
+        }
+      });
+    }
+
+    function renderAirportRestrictionList() {
+      const box = document.getElementById("airportRestrictionList");
+
+      if (!allAdvisoriesCache.length) {
+        box.innerHTML = "해당 날짜 Advisory 없음";
+        return;
+      }
+
+      box.innerHTML = allAdvisoriesCache.map(a => {
+        const facs = (a.facilityCodes || []).join(", ");
+        const airports = (a.airportCodes || []).join(", ");
+        const mainLabel = airports || a.controlElement || facs || "DCC";
+
+        return `
+          <div class="airport-item" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}')">
+            <b>${escapeHtml(mainLabel)}</b>
+            ${facs ? "<span style='color:#6b7280;'> / " + escapeHtml(facs) + "</span>" : ""}<br>
+            ADVZY ${escapeHtml(a.advn)} - ${escapeHtml(a.title || "").slice(0, 90)}
+          </div>
+        `;
+      }).join("");
     }
 
     async function loadAdvisoriesForFacility(ident) {
       const box = document.getElementById("advisoryBox");
 
       if (!FAA_APPS_SCRIPT_URL || FAA_APPS_SCRIPT_URL.includes("여기에_")) {
-        box.innerHTML = "Apps Script URL 미설정. 현재는 FAA List 버튼으로 원문 확인.";
+        box.innerHTML = "Apps Script URL 미설정.";
         return;
       }
 
@@ -516,7 +695,7 @@
         "&includeDetails=true";
 
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
 
         if (!data.ok) {
@@ -532,11 +711,12 @@
           return `
             <div class="advisory-item">
               <b>ADVZY ${escapeHtml(a.advn)}</b><br>
-              ${escapeHtml(a.title || "")}<br>
-              ${a.eventTime ? "Event: " + escapeHtml(a.eventTime) + "<br>" : ""}
-              ${a.constrainedFacilities ? "Facility: " + escapeHtml(a.constrainedFacilities) + "<br>" : ""}
-              ${a.message ? "<div style='margin-top:4px;'>" + escapeHtml(a.message).slice(0, 350) + "</div>" : ""}
-              ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원문 열기</a>" : ""}
+              ${highlightTerms(a.title || "", [ident])}<br>
+              ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, [ident]) + "<br>" : ""}
+              ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, [ident]) + "<br>" : ""}
+              ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), [ident]) + "</div>" : ""}
+              <a href="#" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+              ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
             </div>
           `;
         }).join("");
@@ -547,17 +727,73 @@
       }
     }
 
+    function showAdvisoryDetail(advn) {
+      const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
+      if (!a) {
+        document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
+        return;
+      }
+
+      const terms = [];
+
+      if (selectedIdent) terms.push(selectedIdent);
+      (a.facilityCodes || []).forEach(x => terms.push(x));
+      (a.airportCodes || []).forEach(x => terms.push(x));
+
+      const uniqueTerms = Array.from(new Set(terms));
+
+      const raw = a.rawText || a.message || a.title || "";
+
+      document.getElementById("advisoryBox").innerHTML = `
+        <div class="advisory-item">
+          <b>${highlightTerms("ADVZY " + a.advn, uniqueTerms)}</b><br>
+          ${highlightTerms(a.title || "", uniqueTerms)}<br>
+          ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
+          ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, uniqueTerms) + "<br>" : ""}
+          ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, uniqueTerms) + "<br>" : ""}
+          <div class="detail-text">${highlightTerms(raw, uniqueTerms)}</div>
+          ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본 페이지 열기</a>" : ""}
+        </div>
+      `;
+    }
+
     /*******************************************************
      * ARTCC Layer
      *******************************************************/
-    function getArtccStyle(isSelected) {
+    function getArtccStyle(status) {
+      if (status === "selected") {
+        return {
+          color: "#ef4444",
+          weight: 3,
+          opacity: 1,
+          fillColor: "#ef4444",
+          fillOpacity: 0.20
+        };
+      }
+
+      if (status === "hasAdvisory") {
+        return {
+          color: "#f97316",
+          weight: 2.4,
+          opacity: 1,
+          fillColor: "#f97316",
+          fillOpacity: 0.16
+        };
+      }
+
       return {
-        color: isSelected ? "#ef4444" : "#6b7280",
-        weight: isSelected ? 3 : 1.5,
-        opacity: 0.95,
-        fillColor: isSelected ? "#ef4444" : "#64748b",
-        fillOpacity: isSelected ? 0.18 : 0.06
+        color: "#6b7280",
+        weight: 1.5,
+        opacity: 0.75,
+        fillColor: "#64748b",
+        fillOpacity: 0.05
       };
+    }
+
+    function getLayerStatusByCode(code) {
+      if (selectedIdent && code === selectedIdent) return "selected";
+      if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) return "hasAdvisory";
+      return "normal";
     }
 
     function selectArtcc(layer, feature) {
@@ -565,18 +801,16 @@
       const ident = p.ident || p.facility || p.id || "";
       const name = p.name || ident;
 
-      if (selectedLayer && selectedLayer.setStyle) {
-        selectedLayer.setStyle(getArtccStyle(false));
-      }
-
       selectedLayer = layer;
       selectedIdent = ident;
 
-      layer.setStyle(getArtccStyle(true));
-      layer.bringToFront();
-
       document.getElementById("selectedArtcc").textContent = ident || "-";
       document.getElementById("selectedName").textContent = name || "-";
+
+      updateArtccAdvisoryColors();
+
+      layer.setStyle(getArtccStyle("selected"));
+      layer.bringToFront();
 
       updateFaaLink();
       loadAdvisoriesForFacility(ident);
@@ -595,13 +829,16 @@
 
       const geoLayer = L.geoJSON(data, {
         style: function () {
-          return getArtccStyle(false);
+          return getArtccStyle("normal");
         },
 
         onEachFeature: function (feature, layer) {
           const p = feature.properties || {};
           const ident = p.ident || p.facility || p.id || "";
           const name = p.name || ident;
+
+          layer._artccIdent = ident;
+          artccLayerIndex[ident] = layer;
 
           layer.bindTooltip(ident, {
             permanent: true,
@@ -621,17 +858,17 @@
           });
 
           layer.on("mouseover", function () {
-            if (layer !== selectedLayer) {
+            if (ident !== selectedIdent) {
               layer.setStyle({
-                weight: 2.5,
-                fillOpacity: 0.12
+                weight: 3,
+                fillOpacity: 0.22
               });
             }
           });
 
           layer.on("mouseout", function () {
-            if (layer !== selectedLayer) {
-              layer.setStyle(getArtccStyle(false));
+            if (ident !== selectedIdent) {
+              layer.setStyle(getArtccStyle(getLayerStatusByCode(ident)));
             }
           });
         }
@@ -639,7 +876,6 @@
 
       geoLayer.addTo(artccGroup);
 
-      // ZAN 포함 시 알래스카까지 잡혀서 본토가 작아질 수 있으므로 본토 중심 고정
       map.setView([39.5, -98.5], 4);
     }
 
@@ -665,7 +901,7 @@
       const color = "#" + rr + gg + bb;
 
       return {
-        color,
+        color: color,
         opacity: isNaN(opacity) ? fallbackOpacity : opacity
       };
     }
@@ -927,30 +1163,6 @@
       };
     }
 
-    function getLabelColor(feature) {
-      const base = kmlColorToCss(feature.style.labelColor, "#ffffff", 1);
-      return base.color || "#ffffff";
-    }
-
-    function addWaypointLabel(marker, feature) {
-      if (!feature.name) return;
-
-      const labelColor = getLabelColor(feature);
-      const labelScale = Number(feature.style.labelScale || 1);
-      const fontSize = Math.max(9, Math.round(11 * labelScale));
-
-      marker.bindTooltip(
-        `<span style="color:${labelColor}; font-size:${fontSize}px;">${escapeHtml(feature.name)}</span>`,
-        {
-          permanent: true,
-          direction: "right",
-          offset: [8, 0],
-          className: "route-waypoint-label",
-          opacity: 1
-        }
-      );
-    }
-
     function drawKMLLine(feature, aircraft) {
       const lineStyle = getLineStyle(feature);
       const weight = feature.style.lineWidth || 4;
@@ -1017,12 +1229,9 @@
         }).addTo(routeLayer);
       }
 
-marker.bindPopup(popupHtml, POPUP_OPTIONS);
+      marker.bindPopup(popupHtml, POPUP_OPTIONS);
 
-// Waypoint 이름 라벨은 표시하지 않음
-// addWaypointLabel(marker, feature);
-
-return marker;
+      return marker;
     }
 
     function drawKMLPolygon(feature, aircraft) {
@@ -1104,8 +1313,6 @@ return marker;
           drawKMLPoint(f, aircraft, idx, pointFeatures.length);
         });
 
-        // Route 로딩 후 전체 Route 기준으로 줌아웃하지 않음.
-        // ARTCC 앱 목적상 미국 관제구역 중심 유지.
         map.setView([39.5, -98.5], 4);
 
         document.getElementById("routeStatus").textContent =
@@ -1143,6 +1350,7 @@ return marker;
      *******************************************************/
     document.getElementById("dateInput").addEventListener("change", function () {
       updateFaaLink();
+      loadAllAdvisoriesForDate();
 
       if (selectedIdent) {
         loadAdvisoriesForFacility(selectedIdent);
@@ -1153,6 +1361,7 @@ return marker;
 
     loadArtccGeojson()
       .then(() => {
+        loadAllAdvisoriesForDate();
         autoLoadRouteFromUrl();
       })
       .catch(err => {
