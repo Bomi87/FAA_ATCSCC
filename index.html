@@ -603,11 +603,19 @@ function fixMobileViewportAfterKeyboard() {
 
     const mobileButtons = document.querySelector(".mobile-panel-buttons");
     if (mobileButtons) {
+      const topPx = window.visualViewport
+        ? window.visualViewport.offsetTop + 8
+        : 8;
+
       mobileButtons.style.position = "fixed";
-      mobileButtons.style.top = "calc(env(safe-area-inset-top) + 8px)";
+      mobileButtons.style.top = topPx + "px";
       mobileButtons.style.left = "8px";
       mobileButtons.style.right = "8px";
-      mobileButtons.style.zIndex = "2500";
+      mobileButtons.style.zIndex = "99999";
+      mobileButtons.style.display = "grid";
+      mobileButtons.style.visibility = "visible";
+      mobileButtons.style.opacity = "1";
+      mobileButtons.style.transform = "none";
     }
 
     if (map && map.invalidateSize) {
@@ -615,10 +623,12 @@ function fixMobileViewportAfterKeyboard() {
     }
   };
 
-  setTimeout(reset, 100);
-  setTimeout(reset, 350);
-  setTimeout(reset, 800);
-  setTimeout(reset, 1200);
+  requestAnimationFrame(reset);
+  setTimeout(reset, 50);
+  setTimeout(reset, 200);
+  setTimeout(reset, 500);
+  setTimeout(reset, 1000);
+  setTimeout(reset, 1500);
 }
 
 let selectedLayer = null;
@@ -1931,22 +1941,15 @@ function hideMobilePanels() {
         await toggleNdbAirports(button);
       }
 
-      filterNdbAirports(input.value);
-      input.blur();
-
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-        map.invalidateSize(true);
-      }, 300);
+   filterNdbAirports(input.value);
+input.blur();
+fixMobileViewportAfterKeyboard();
     }
   });
 
-  input.addEventListener("blur", function () {
-    setTimeout(() => {
-      window.scrollTo(0, 0);
-      map.invalidateSize(true);
-    }, 300);
-  });
+ input.addEventListener("blur", function () {
+  fixMobileViewportAfterKeyboard();
+});
 
   button.addEventListener("click", async function () {
     await toggleNdbAirports(button);
@@ -1963,10 +1966,14 @@ map.on("click", function () {
 });
 
 if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", function () {
-    fixMobileViewportAfterKeyboard();
-  });
+  window.visualViewport.addEventListener("resize", fixMobileViewportAfterKeyboard);
+  window.visualViewport.addEventListener("scroll", fixMobileViewportAfterKeyboard);
 }
+
+window.addEventListener("resize", fixMobileViewportAfterKeyboard);
+window.addEventListener("orientationchange", function () {
+  setTimeout(fixMobileViewportAfterKeyboard, 500);
+});
     /*******************************************************
      * Init
      *******************************************************/
