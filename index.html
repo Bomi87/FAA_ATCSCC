@@ -706,11 +706,12 @@ let isAdvisoryDetailOpen = false;
         return;
       }
 
-      box.innerHTML = `
-        <div class="advisory-item">
-          <b>${escapeHtml(ap)} 관련 Advisory</b>
-        </div>
-      ` + matches.map(a => {
+  box.innerHTML = `
+  <div class="advisory-item">
+    <b>${escapeHtml(ap)} 관련 Advisory</b>
+    <span style="color:#6b7280; font-size:11px; margin-left:6px;">(Times in UTC)</span>
+  </div>
+` + matches.map(a => {
         const terms = Array.from(new Set([
           ap,
           ...(a.controlFacilityCodes || []),
