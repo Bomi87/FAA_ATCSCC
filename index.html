@@ -395,13 +395,15 @@
     let selectedIdent = "";
     let currentRouteName = "";
 
-   let allAdvisoriesCache = [];
+let allAdvisoriesCache = [];
 let artccLayerIndex = {};
 let facilityAdvisoryMap = {};
 let airportAdvisoryMap = {};
 
 let advisoryCacheLoadedAt = 0;
-const ADVISORY_CACHE_TTL_MS = 3 * 60 * 1000; // 3분
+const ADVISORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+
+let isAllAdvisoryLoading = false;
     let previousAdvisoryBoxHtml = "";
 let isAdvisoryDetailOpen = false;
 
@@ -604,56 +606,71 @@ function updateFaaLink() {
 
   
 
-    async function loadAllAdvisoriesForDate() {
-      const date = getDateValue();
-      const box = document.getElementById("airportRestrictionList");
+async function loadAllAdvisoriesForDate() {
+  if (isAllAdvisoryLoading) return;
 
-      if (!FAA_APPS_SCRIPT_URL || FAA_APPS_SCRIPT_URL.includes("여기에_")) {
-        box.innerHTML = "Apps Script URL 미설정.";
-        return;
-      }
+  isAllAdvisoryLoading = true;
 
-      box.innerHTML = "Advisory 전체 조회 중...";
+  const date = getDateValue();
+  const box = document.getElementById("airportRestrictionList");
 
-      const url =
-        FAA_APPS_SCRIPT_URL +
-        "?date=" + encodeURIComponent(date) +
-        "&includeDetails=true";
+  if (!FAA_APPS_SCRIPT_URL || FAA_APPS_SCRIPT_URL.includes("여기에_")) {
+    box.innerHTML = "Apps Script URL 미설정.";
+    isAllAdvisoryLoading = false;
+    return;
+  }
 
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        const data = await res.json();
+  box.innerHTML = "Advisory 전체 조회 중...";
 
-        if (!data.ok) {
-          throw new Error(data.error || "Apps Script error");
-        }
+  const url =
+    FAA_APPS_SCRIPT_URL +
+    "?date=" + encodeURIComponent(date) +
+    "&includeDetails=true";
 
-allAdvisoriesCache = data.advisories || [];
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    const data = await res.json();
 
-/* 오늘 UTC 조회 결과가 0개면 어제 UTC로 자동 재조회 */
-const todayUtc = getTodayUtcDateValue();
-const yesterdayUtc = getYesterdayUtcDateValue();
-
-if (allAdvisoriesCache.length === 0 && date === todayUtc) {
-  setDateInputValue(yesterdayUtc);
-  updateFaaLink();
-
-  box.innerHTML = "오늘 UTC Advisory 없음. 어제 UTC 날짜로 재조회 중...";
-
-  return loadAllAdvisoriesForDate();
-}
-
-advisoryCacheLoadedAt = Date.now();
-
-buildFacilityAdvisoryMap();
-buildAirportAdvisoryMap();
-updateArtccAdvisoryColors();
-renderAirportRestrictionList();
-      } catch (err) {
-        console.error(err);
-        box.innerHTML = "Advisory 전체 조회 실패: " + escapeHtml(err.message);
-      }
+    if (!data.ok) {
+      throw new Error(data.error || "Apps Script error");
     }
+
+    allAdvisoriesCache = data.advisories || [];
+
+    const todayUtc = getTodayUtcDateValue();
+    const yesterdayUtc = getYesterdayUtcDateValue();
+
+    // 오늘 UTC 조회 결과가 0개면 어제 UTC로 자동 재조회
+    if (allAdvisoriesCache.length === 0 && date === todayUtc) {
+      setDateInputValue(yesterdayUtc);
+      updateFaaLink();
+
+      box.innerHTML = "오늘 UTC Advisory 없음. 어제 UTC 날짜로 재조회 중...";
+
+      isAllAdvisoryLoading = false; // 중요: 재조회 전에 false로 풀어줘야 함
+      return loadAllAdvisoriesForDate();
+    }
+
+    advisoryCacheLoadedAt = Date.now();
+
+    buildFacilityAdvisoryMap();
+    buildAirportAdvisoryMap();
+    updateArtccAdvisoryColors();
+    renderAirportRestrictionList();
+
+    // 선택된 ARTCC가 있으면, 새로 받은 캐시 기준으로 다시 표시
+    if (selectedIdent) {
+      renderAdvisoriesForFacilityFromCache(selectedIdent);
+    }
+
+  } catch (err) {
+    console.error(err);
+    box.innerHTML = "Advisory 전체 조회 실패: " + escapeHtml(err.message);
+
+  } finally {
+    isAllAdvisoryLoading = false;
+  }
+}
 
     function buildFacilityAdvisoryMap() {
       facilityAdvisoryMap = {};
