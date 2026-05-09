@@ -354,12 +354,11 @@
     /*******************************************************
      * Map
      *******************************************************/
-    const map = L.map("map", {
-      zoomControl: true,
-      preferCanvas: true,
-      worldCopyJump: false
-    }).setView([39.5, -98.5], 4);
-
+  const map = L.map("map", {
+  zoomControl: false,
+  preferCanvas: true,
+  worldCopyJump: false
+}).setView([39.5, -98.5], 4);
     const streetMap = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
       {
