@@ -401,15 +401,17 @@ let facilityAdvisoryMap = {};
 let airportAdvisoryMap = {};
 
 let advisoryCacheLoadedAt = 0;
+let advisoryCacheDate = "";
 const ADVISORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 
 let isAllAdvisoryLoading = false;
     let previousAdvisoryBoxHtml = "";
 let isAdvisoryDetailOpen = false;
 
-    function isAdvisoryCacheValid() {
+ function isAdvisoryCacheValid() {
   if (!allAdvisoriesCache || !allAdvisoriesCache.length) return false;
   if (!advisoryCacheLoadedAt) return false;
+  if (advisoryCacheDate !== getDateValue()) return false;
 
   return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
 }
@@ -651,9 +653,10 @@ async function loadAllAdvisoriesForDate() {
       return loadAllAdvisoriesForDate();
     }
 
-    advisoryCacheLoadedAt = Date.now();
+advisoryCacheLoadedAt = Date.now();
+advisoryCacheDate = getDateValue();
 
-    buildFacilityAdvisoryMap();
+buildFacilityAdvisoryMap();
     buildAirportAdvisoryMap();
     updateArtccAdvisoryColors();
     renderAirportRestrictionList();
