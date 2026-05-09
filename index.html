@@ -382,17 +382,17 @@
       }
     );
 
-    L.control.layers(
-      {
-        "Street Map": streetMap,
-        "Satellite": satelliteMap
-      },
-      null,
-      {
-        position: "topright",
-        collapsed: false
-      }
-    ).addTo(map);
+L.control.layers(
+  {
+    "Street Map": streetMap,
+    "Satellite": satelliteMap
+  },
+  null,
+  {
+    position: "bottomleft",
+    collapsed: true
+  }
+).addTo(map);
 
     const artccGroup = L.featureGroup().addTo(map);
     const routeLayer = L.featureGroup().addTo(map);
