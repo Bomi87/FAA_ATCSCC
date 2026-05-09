@@ -405,6 +405,8 @@
     let artccLayerIndex = {};
     let facilityAdvisoryMap = {};
     let airportAdvisoryMap = {};
+    let previousAdvisoryBoxHtml = "";
+let isAdvisoryDetailOpen = false;
 
     /*******************************************************
      * Basic Utils
@@ -725,7 +727,7 @@
             ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
             ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
             ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
-            <a href="#" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+           <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
             ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
           </div>
         `;
@@ -778,7 +780,7 @@
               ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
               ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
               ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
-              <a href="#" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+             <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
               ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
             </div>
           `;
@@ -790,8 +792,13 @@
       }
     }
 
-    function showAdvisoryDetail(advn) {
-      const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
+ function showAdvisoryDetail(advn) {
+  const box = document.getElementById("advisoryBox");
+
+  previousAdvisoryBoxHtml = box.innerHTML;
+  isAdvisoryDetailOpen = true;
+
+  const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
       if (!a) {
         document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
         return;
@@ -807,7 +814,7 @@
       const uniqueTerms = Array.from(new Set(terms));
       const raw = a.rawText || a.message || a.title || "";
 
-      document.getElementById("advisoryBox").innerHTML = `
+   box.innerHTML = `
         <div class="advisory-item">
           <b>${highlightTerms("ADVZY " + a.advn, uniqueTerms)}</b><br>
           ${highlightTerms(a.title || "", uniqueTerms)}<br>
@@ -1420,7 +1427,19 @@
         loadRouteByAircraft(route);
       }
     }
+document.addEventListener("click", function (e) {
+  const advisoryBox = document.getElementById("advisoryBox");
 
+  if (!isAdvisoryDetailOpen) return;
+
+  if (advisoryBox.contains(e.target)) return;
+
+  if (previousAdvisoryBoxHtml) {
+    advisoryBox.innerHTML = previousAdvisoryBoxHtml;
+  }
+
+  isAdvisoryDetailOpen = false;
+});
     map.on("click", function () {
   if (selectedIdent) {
     clearSelectedArtcc();
