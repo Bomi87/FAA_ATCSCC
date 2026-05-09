@@ -298,6 +298,22 @@
 .leaflet-control-ndb-airport button.active {
   background: #16a34a;
 }
+
+.ndb-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #111827;
+  font-size: 10px;
+  font-weight: 700;
+  text-shadow:
+    -1px -1px 0 #ffffff,
+     1px -1px 0 #ffffff,
+    -1px  1px 0 #ffffff,
+     1px  1px 0 #ffffff,
+     0 0 3px rgba(255,255,255,0.9);
+}
+}
 .mobile-panel-buttons {
   display: none;
 }
@@ -389,6 +405,7 @@
     font-size: 9px;
     margin-bottom: 3px;
   }
+  
 
   input {
     padding: 5px 6px;
@@ -423,6 +440,10 @@
   font-size: 9.6px;
   padding: 0 2px;
   border-radius: 2px;
+}
+
+  .ndb-label {
+  font-size: 8px;
 }
 
   .artcc-label {
@@ -1653,6 +1674,8 @@ async function loadNdbAirports() {
 function drawNdbAirportPoint(feature) {
   const latlng = toRenderLatLng(feature.coords.lat, feature.coords.lon);
 
+  const name = feature.name || "NDB Airport";
+
   const marker = L.circleMarker(latlng, {
     radius: 4,
     color: "#111827",
@@ -1663,12 +1686,20 @@ function drawNdbAirportPoint(feature) {
 
   marker.bindPopup(
     buildPopupHtml(
-      feature.name || "NDB Airport",
+      name,
       feature.description || "",
       feature.extraRows || []
     ),
     POPUP_OPTIONS
   );
+
+  marker.bindTooltip(escapeHtml(name), {
+    permanent: true,
+    direction: "right",
+    offset: [6, 0],
+    className: "ndb-label",
+    opacity: 1
+  });
 
   return marker;
 }
