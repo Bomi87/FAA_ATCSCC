@@ -313,7 +313,10 @@
      1px  1px 0 #ffffff,
      0 0 3px rgba(255,255,255,0.9);
 }
+    .ndb-label::before {
+  display: none !important;
 }
+
 .mobile-panel-buttons {
   display: none;
 }
@@ -1693,13 +1696,13 @@ function drawNdbAirportPoint(feature) {
     POPUP_OPTIONS
   );
 
-  marker.bindTooltip(escapeHtml(name), {
-    permanent: true,
-    direction: "right",
-    offset: [6, 0],
-    className: "ndb-label",
-    opacity: 1
-  });
+marker.bindTooltip(escapeHtml(name), {
+  permanent: true,
+  direction: "right",
+  offset: [2, 0],
+  className: "ndb-label",
+  opacity: 1
+});
 
   return marker;
 }
