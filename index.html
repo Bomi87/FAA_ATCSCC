@@ -775,7 +775,7 @@ buildFacilityAdvisoryMap();
             ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
             ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
             ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
-           <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+           <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">내용 보기</a>
             ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
           </div>
         `;
@@ -815,7 +815,7 @@ buildFacilityAdvisoryMap();
         ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
         ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
         ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
-        <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+        <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">내용 보기</a>
         ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
       </div>
     `;
@@ -867,7 +867,7 @@ buildFacilityAdvisoryMap();
               ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
               ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
               ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
-             <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+             <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">내용 보기</a>
               ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
             </div>
           `;
@@ -910,7 +910,7 @@ buildFacilityAdvisoryMap();
           ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, uniqueTerms) + "<br>" : ""}
           ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, uniqueTerms) + "<br>" : ""}
           <div class="detail-text">${highlightTerms(raw, uniqueTerms)}</div>
-          ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본 페이지 열기</a>" : ""}
+          ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
         </div>
       `;
     }
