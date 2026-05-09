@@ -455,11 +455,11 @@
     /*******************************************************
      * Map
      *******************************************************/
-  const map = L.map("map", {
+const map = L.map("map", {
   zoomControl: false,
   preferCanvas: true,
   worldCopyJump: false
-}).setView([39.5, -98.5], 4);
+}).setView([39.5, -98.5], window.innerWidth <= 767 ? 3 : 4);
     const streetMap = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
       {
@@ -652,7 +652,9 @@ let isAdvisoryDetailOpen = false;
     function toRenderLatLng(lat, lon) {
       return [lat, shiftLonNearReference(lon, ROUTE_REFERENCE_LON)];
     }
-
+function getDefaultMapZoom() {
+  return window.innerWidth <= 767 ? 3 : 4;
+}
     /*******************************************************
      * FAA Advisory
      *******************************************************/
@@ -1164,7 +1166,7 @@ if (window.innerWidth <= 767) {
 
       geoLayer.addTo(artccGroup);
 
-      map.setView([39.5, -98.5], 4);
+     map.setView([39.5, -98.5], getDefaultMapZoom());
     }
 
     /*******************************************************
@@ -1601,7 +1603,7 @@ if (window.innerWidth <= 767) {
           drawKMLPoint(f, aircraft, idx, pointFeatures.length);
         });
 
-        map.setView([39.5, -98.5], 4);
+        map.setView([39.5, -98.5], getDefaultMapZoom());
 
  
 
