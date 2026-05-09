@@ -295,7 +295,9 @@
 .leaflet-control-ndb-airport button:hover {
   background: #374151;
 }
-
+.leaflet-control-ndb-airport button.active {
+  background: #16a34a;
+}
 .mobile-panel-buttons {
   display: none;
 }
@@ -517,6 +519,13 @@ const map = L.map("map", {
         attribution: "Tiles &copy; Esri"
       }
     );
+const artccGroup = L.featureGroup().addTo(map);
+const routeLayer = L.featureGroup().addTo(map);
+const ndbLayer = L.featureGroup();
+
+let ndbVisible = false;
+let ndbLoaded = false;
+
 function createNdbAirportButton() {
   const control = L.control({ position: "bottomright" });
 
@@ -526,17 +535,14 @@ function createNdbAirportButton() {
 
     button.type = "button";
     button.textContent = "NDB";
-    button.title = "NDB Airport";
+    button.title = "Show / Hide NDB Airports";
 
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
 
-    L.DomEvent.on(button, "click", function (e) {
+    L.DomEvent.on(button, "click", async function (e) {
       L.DomEvent.stop(e);
-
-      // 여기에 NDB 공항 표시 기능 연결
-      // 예: toggleNdbAirports();
-      alert("NDB Airport 기능 연결 예정");
+      await toggleNdbAirports(button);
     });
 
     return container;
@@ -546,9 +552,6 @@ function createNdbAirportButton() {
 }
 
 createNdbAirportButton().addTo(map);
-
-    const artccGroup = L.featureGroup().addTo(map);
-    const routeLayer = L.featureGroup().addTo(map);
 
     let selectedLayer = null;
     let selectedIdent = "";
@@ -1590,7 +1593,85 @@ if (window.innerWidth <= 767) {
 
       return marker;
     }
+async function toggleNdbAirports(button) {
+  try {
+    if (ndbVisible) {
+      if (map.hasLayer(ndbLayer)) {
+        map.removeLayer(ndbLayer);
+      }
 
+      ndbVisible = false;
+      button.textContent = "NDB";
+      button.classList.remove("active");
+      return;
+    }
+
+    if (!ndbLoaded) {
+      button.disabled = true;
+      button.textContent = "Loading";
+
+      await loadNdbAirports();
+
+      ndbLoaded = true;
+      button.disabled = false;
+    }
+
+    if (!map.hasLayer(ndbLayer)) {
+      map.addLayer(ndbLayer);
+    }
+
+    ndbVisible = true;
+    button.textContent = "NDB ON";
+    button.classList.add("active");
+
+  } catch (err) {
+    console.error(err);
+    button.disabled = false;
+    button.textContent = "NDB";
+    alert("NDB 로드 실패: " + err.message);
+  }
+}
+
+async function loadNdbAirports() {
+  const res = await fetch(NDB_KML_URL, { cache: "no-store" });
+
+  if (!res.ok) {
+    throw new Error("ACJ_NDB.kml load failed: " + res.status);
+  }
+
+  const kmlText = await res.text();
+  const features = extractKMLFeatures(kmlText)
+    .filter(f => f.type === "Point" && f.coords);
+
+  ndbLayer.clearLayers();
+
+  features.forEach(f => {
+    drawNdbAirportPoint(f);
+  });
+}
+
+function drawNdbAirportPoint(feature) {
+  const latlng = toRenderLatLng(feature.coords.lat, feature.coords.lon);
+
+  const marker = L.circleMarker(latlng, {
+    radius: 4,
+    color: "#111827",
+    weight: 1,
+    fillColor: "#06b6d4",
+    fillOpacity: 0.95
+  }).addTo(ndbLayer);
+
+  marker.bindPopup(
+    buildPopupHtml(
+      feature.name || "NDB Airport",
+      feature.description || "",
+      feature.extraRows || []
+    ),
+    POPUP_OPTIONS
+  );
+
+  return marker;
+}
     function drawKMLPolygon(feature, aircraft) {
       const lineStyle = kmlColorToCss(feature.style.lineColor, "#00aa55", 0.9);
       const fillStyle = kmlColorToCss(feature.style.polyColor, "#00CC66", 0.25);
