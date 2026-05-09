@@ -28,7 +28,7 @@
       top: 12px;
       left: 12px;
       z-index: 1000;
-      width: 310px;
+      width: 320px;
       max-width: calc(100vw - 24px);
       background: rgba(255, 255, 255, 0.96);
       border-radius: 12px;
@@ -93,6 +93,56 @@
       background: #1d4ed8;
     }
 
+    .route-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .route-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 4px;
+      background: #111827;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .route-btn:hover {
+      background: #374151;
+    }
+
+    .route-btn.active {
+      background: #16a34a;
+    }
+
+    .clear-btn {
+      width: 100%;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 4px;
+      background: #6b7280;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+
+    .clear-btn:hover {
+      background: #4b5563;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #374151;
+      line-height: 1.4;
+    }
+
     .hint {
       color: #6b7280;
       font-size: 11px;
@@ -115,6 +165,20 @@
          0 0 4px rgba(0,0,0,0.8);
     }
 
+    .route-label {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      color: #ffff00;
+      font-size: 12px;
+      font-weight: 700;
+      text-shadow:
+        -1px -1px 0 #000,
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000;
+    }
+
     .leaflet-popup-content {
       font-size: 12px;
       line-height: 1.4;
@@ -122,7 +186,7 @@
 
     @media (max-width: 767px) {
       .top-panel {
-        width: 270px;
+        width: 280px;
         font-size: 11px;
       }
 
@@ -146,18 +210,27 @@
       <input id="dateInput" type="date" value="2026-05-08" />
     </div>
 
+    <label>Route Overlay</label>
+    <div class="route-btn-row">
+      <button id="btnHL8080" class="route-btn" onclick="loadRouteByAircraft('HL8080')">HL8080</button>
+      <button id="btnHL8372" class="route-btn" onclick="loadRouteByAircraft('HL8372')">HL8372</button>
+    </div>
+    <button class="clear-btn" onclick="clearRoute()">Clear Route</button>
+
     <div class="selected-box">
       Selected ARTCC: <b id="selectedArtcc">-</b><br>
-      Name: <span id="selectedName">-</span>
+      Name: <span id="selectedName">-</span><br>
+      Route: <b id="selectedRoute">-</b>
     </div>
 
     <a id="faaListLink" class="btn" href="#" target="_blank">
       Open FAA Advisory List
     </a>
 
+    <div id="routeStatus" class="status">Route 미선택</div>
+
     <div class="hint">
-      ARTCC 구역을 클릭하면 해당 날짜 FAA Advisory List 링크가 생성됨.<br>
-      다음 단계에서 Apps Script를 붙이면 클릭한 구역 관련 Advisory만 자동 필터링 가능.
+      HL8080 또는 HL8372 버튼을 누르면 기존 FLIGHT_MAP의 KML 루트가 이 지도 위에 표시됨.
     </div>
   </div>
 
@@ -198,8 +271,13 @@
     ).addTo(map);
 
     const artccGroup = L.featureGroup().addTo(map);
+    const routeLayer = L.featureGroup().addTo(map);
+
     let selectedLayer = null;
     let selectedIdent = "";
+    let currentRouteName = "";
+
+    const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
 
     function getDateValue() {
       return document.getElementById("dateInput").value || "2026-05-08";
@@ -326,14 +404,189 @@
       }
     }
 
+    function parseCoordinates(coordText) {
+      if (!coordText) return [];
+
+      return coordText
+        .trim()
+        .split(/\s+/)
+        .map(row => {
+          const parts = row.split(",");
+          const lon = parseFloat(parts[0]);
+          const lat = parseFloat(parts[1]);
+          const alt = parts.length > 2 ? parseFloat(parts[2]) : null;
+
+          return { lat, lon, alt };
+        })
+        .filter(p =>
+          isFinite(p.lat) &&
+          isFinite(p.lon) &&
+          Math.abs(p.lat) <= 90 &&
+          Math.abs(p.lon) <= 180 &&
+          !(Math.abs(p.lat) < 0.000001 && Math.abs(p.lon) < 0.000001)
+        );
+    }
+
+    function parseKmlRoute(kmlText) {
+      const xml = new DOMParser().parseFromString(kmlText, "text/xml");
+      const lineNodes = Array.from(xml.getElementsByTagName("LineString"));
+      const pointNodes = Array.from(xml.getElementsByTagName("Point"));
+
+      const lines = [];
+      const points = [];
+
+      lineNodes.forEach(node => {
+        const coordNode = node.getElementsByTagName("coordinates")[0];
+        if (!coordNode) return;
+
+        const coords = parseCoordinates(coordNode.textContent);
+        if (coords.length >= 2) {
+          lines.push(coords);
+        }
+      });
+
+      pointNodes.forEach(node => {
+        const coordNode = node.getElementsByTagName("coordinates")[0];
+        if (!coordNode) return;
+
+        const coords = parseCoordinates(coordNode.textContent);
+        if (coords.length > 0) {
+          points.push(coords[0]);
+        }
+      });
+
+      return { lines, points };
+    }
+
+    function getRouteKmlUrl(aircraft) {
+      return ROUTE_BASE_URL + aircraft + ".kml?v=" + Date.now();
+    }
+
+    function setActiveRouteButton(aircraft) {
+      document.getElementById("btnHL8080").classList.remove("active");
+      document.getElementById("btnHL8372").classList.remove("active");
+
+      if (aircraft === "HL8080") {
+        document.getElementById("btnHL8080").classList.add("active");
+      }
+
+      if (aircraft === "HL8372") {
+        document.getElementById("btnHL8372").classList.add("active");
+      }
+    }
+
+    async function loadRouteByAircraft(aircraft) {
+      try {
+        currentRouteName = aircraft;
+        document.getElementById("selectedRoute").textContent = aircraft;
+        document.getElementById("routeStatus").textContent = aircraft + " Route 로딩 중...";
+        setActiveRouteButton(aircraft);
+
+        routeLayer.clearLayers();
+
+        const url = getRouteKmlUrl(aircraft);
+        const res = await fetch(url, { cache: "no-store" });
+
+        if (!res.ok) {
+          throw new Error("KML load failed: " + res.status);
+        }
+
+        const kmlText = await res.text();
+        const route = parseKmlRoute(kmlText);
+
+        if (!route.lines.length && !route.points.length) {
+          throw new Error("KML 안에 유효한 LineString 또는 Point가 없습니다.");
+        }
+
+        const boundsGroup = L.featureGroup();
+
+        route.lines.forEach((lineCoords, idx) => {
+          const latlngs = lineCoords.map(p => [p.lat, p.lon]);
+
+          const line = L.polyline(latlngs, {
+            color: "#ffd400",
+            weight: 5,
+            opacity: 0.95
+          }).addTo(routeLayer);
+
+          line.bindPopup(
+            "<b>" + aircraft + "</b><br>" +
+            "Route Line " + (idx + 1)
+          );
+
+          boundsGroup.addLayer(line);
+        });
+
+        route.points.forEach((p, idx) => {
+          let fillColor = "#ffffff";
+
+          if (idx === 0) fillColor = "#22c55e";
+          if (idx === route.points.length - 1) fillColor = "#3b82f6";
+
+          const marker = L.circleMarker([p.lat, p.lon], {
+            radius: 4,
+            color: "#111827",
+            weight: 1,
+            fillColor: fillColor,
+            fillOpacity: 1
+          }).addTo(routeLayer);
+
+          marker.bindPopup(
+            "<b>" + aircraft + "</b><br>" +
+            "Route Point " + (idx + 1)
+          );
+
+          boundsGroup.addLayer(marker);
+        });
+
+        if (boundsGroup.getBounds().isValid()) {
+          map.fitBounds(boundsGroup.getBounds(), {
+            padding: [30, 30],
+            maxZoom: 7
+          });
+        }
+
+        document.getElementById("routeStatus").textContent =
+          aircraft + " Route 표시 완료 / Lines: " +
+          route.lines.length + " / Points: " + route.points.length;
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById("routeStatus").textContent =
+          "Route 로드 실패: " + err.message;
+      }
+    }
+
+    function clearRoute() {
+      routeLayer.clearLayers();
+      currentRouteName = "";
+      document.getElementById("selectedRoute").textContent = "-";
+      document.getElementById("routeStatus").textContent = "Route 미선택";
+      document.getElementById("btnHL8080").classList.remove("active");
+      document.getElementById("btnHL8372").classList.remove("active");
+    }
+
+    function autoLoadRouteFromUrl() {
+      const params = new URLSearchParams(location.search);
+      const route = String(params.get("route") || "").toUpperCase();
+
+      if (route === "HL8080" || route === "HL8372") {
+        loadRouteByAircraft(route);
+      }
+    }
+
     document.getElementById("dateInput").addEventListener("change", updateFaaLink);
 
     updateFaaLink();
 
-    loadArtccGeojson().catch(err => {
-      console.error(err);
-      alert("ARTCC GeoJSON 로드 실패: " + err.message);
-    });
+    loadArtccGeojson()
+      .then(() => {
+        autoLoadRouteFromUrl();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("ARTCC GeoJSON 로드 실패: " + err.message);
+      });
   </script>
 </body>
 </html>
