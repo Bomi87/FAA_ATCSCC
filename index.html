@@ -1066,6 +1066,10 @@ if (isAdvisoryCacheValid()) {
     renderAdvisoriesForFacilityFromCache(ident);
   });
 }
+
+if (window.innerWidth <= 767) {
+  showMobilePanel("main");
+}
     }
     function clearSelectedArtcc() {
   selectedLayer = null;
@@ -1110,11 +1114,12 @@ if (isAdvisoryCacheValid()) {
             opacity: 1
           });
 
-   layer.bindPopup(
-  "<b>" + escapeHtml(ident) + "</b><br>" +
-  escapeHtml(name)
+ layer.bindPopup(
+  "<div onclick=\"if (window.innerWidth <= 767) showMobilePanel('main');\" style=\"cursor:pointer;\">" +
+    "<b>" + escapeHtml(ident) + "</b><br>" +
+    escapeHtml(name) +
+  "</div>"
 );
-
       layer.on("click", function (e) {
   L.DomEvent.stopPropagation(e);
   selectArtcc(layer, feature);
