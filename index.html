@@ -1919,46 +1919,82 @@ function hideMobilePanels() {
   if (topPanel) topPanel.classList.remove("mobile-open");
   if (rightPanel) rightPanel.classList.remove("mobile-open");
 }  
-    function initNdbFixedControl() {
+
+function initNdbFixedControl() {
   const input = document.getElementById("ndbSearchInput");
   const button = document.getElementById("ndbToggleBtn");
 
   if (!input || !button) return;
 
-  input.addEventListener("input", function () {
-    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const isMobile = window.innerWidth <= 767;
+
+  function applyNdbSearch(value) {
+    const code = String(value || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 4);
+
+    input.value = code;
 
     if (ndbLoaded && ndbVisible) {
-      filterNdbAirports(input.value);
+      filterNdbAirports(code);
     }
-  });
 
-  input.addEventListener("keydown", async function (e) {
-    if (e.key === "Enter") {
+    fixMobileViewportAfterKeyboard();
+  }
+
+  if (isMobile) {
+    input.readOnly = true;
+
+    input.addEventListener("click", async function (e) {
       e.preventDefault();
+      input.blur();
+
+      const current = input.value || "";
+      const value = prompt("Enter ICAO code", current);
+
+      if (value === null) {
+        fixMobileViewportAfterKeyboard();
+        return;
+      }
 
       if (!ndbLoaded || !ndbVisible) {
         await toggleNdbAirports(button);
       }
 
-   filterNdbAirports(input.value);
-input.blur();
-fixMobileViewportAfterKeyboard();
-    }
-  });
+      applyNdbSearch(value);
+    });
 
- input.addEventListener("blur", function () {
-  fixMobileViewportAfterKeyboard();
-});
+  } else {
+    input.addEventListener("input", function () {
+      applyNdbSearch(input.value);
+    });
+
+    input.addEventListener("keydown", async function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+
+        if (!ndbLoaded || !ndbVisible) {
+          await toggleNdbAirports(button);
+        }
+
+        applyNdbSearch(input.value);
+      }
+    });
+  }
 
   button.addEventListener("click", async function () {
     await toggleNdbAirports(button);
 
     if (ndbVisible) {
-      filterNdbAirports(input.value);
+      applyNdbSearch(input.value);
     }
   });
 }
+
+
+
+    
 map.on("click", function () {
   if (selectedIdent) {
     clearSelectedArtcc();
