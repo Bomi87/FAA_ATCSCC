@@ -328,14 +328,14 @@
     <div id="advisoryBox" class="advisory-box">ARTCC를 클릭하면 FAA Advisory 조회.</div>
 
     <div class="hint">
-      주황색 ARTCC = 해당 날짜 Advisory 있음.<br>
+      주황색 ARTCC = CONTROL ELEMENT에 해당 구역 포함.<br>
       빨간색 ARTCC = 현재 선택 구역.<br>
-      오른쪽 리스트 클릭 시 앱 내부에서 관련 코드가 하이라이트됨.
+      오른쪽 리스트 = 영향 공항 고유값.
     </div>
   </div>
 
   <div class="right-panel">
-    <div class="title">Restricted / Advisory List</div>
+    <div class="title">Affected Airports</div>
     <div id="airportRestrictionList">
       날짜별 Advisory 조회 중...
     </div>
@@ -348,7 +348,7 @@
      * Config
      *******************************************************/
     const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
-    const FAA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxMRC9kLGP9ZyHLnp6ib5LDjZcNYort-22iokpfYSlFif8mHBA99kdvkZXKAg80OgTWbQ/exec";
+    const FAA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydOKf1ehJ7GTpYa0KHh4veuxgmC7NkInKIRGmhEOIy1epnR8DSe4yHcIIWYqOF8yfpjg/exec";
 
     const ROUTE_REFERENCE_LON = -100;
 
@@ -382,17 +382,17 @@
       }
     );
 
-L.control.layers(
-  {
-    "Street Map": streetMap,
-    "Satellite": satelliteMap
-  },
-  null,
-  {
-    position: "bottomleft",
-    collapsed: true
-  }
-).addTo(map);
+    L.control.layers(
+      {
+        "Street Map": streetMap,
+        "Satellite": satelliteMap
+      },
+      null,
+      {
+        position: "bottomright",
+        collapsed: true
+      }
+    ).addTo(map);
 
     const artccGroup = L.featureGroup().addTo(map);
     const routeLayer = L.featureGroup().addTo(map);
@@ -404,6 +404,7 @@ L.control.layers(
     let allAdvisoriesCache = [];
     let artccLayerIndex = {};
     let facilityAdvisoryMap = {};
+    let airportAdvisoryMap = {};
 
     /*******************************************************
      * Basic Utils
@@ -614,6 +615,7 @@ L.control.layers(
         allAdvisoriesCache = data.advisories || [];
 
         buildFacilityAdvisoryMap();
+        buildAirportAdvisoryMap();
         updateArtccAdvisoryColors();
         renderAirportRestrictionList();
 
@@ -627,11 +629,25 @@ L.control.layers(
       facilityAdvisoryMap = {};
 
       allAdvisoriesCache.forEach(a => {
-        (a.facilityCodes || []).forEach(code => {
+        // 중요: 지도 색칠은 CONTROL ELEMENT 기준만 사용
+        (a.controlFacilityCodes || []).forEach(code => {
           if (!facilityAdvisoryMap[code]) {
             facilityAdvisoryMap[code] = [];
           }
           facilityAdvisoryMap[code].push(a);
+        });
+      });
+    }
+
+    function buildAirportAdvisoryMap() {
+      airportAdvisoryMap = {};
+
+      allAdvisoriesCache.forEach(a => {
+        (a.airportCodes || []).forEach(ap => {
+          if (!airportAdvisoryMap[ap]) {
+            airportAdvisoryMap[ap] = [];
+          }
+          airportAdvisoryMap[ap].push(a);
         });
       });
     }
@@ -657,21 +673,60 @@ L.control.layers(
     function renderAirportRestrictionList() {
       const box = document.getElementById("airportRestrictionList");
 
-      if (!allAdvisoriesCache.length) {
-        box.innerHTML = "해당 날짜 Advisory 없음";
+      const airports = Object.keys(airportAdvisoryMap).sort();
+
+      if (!airports.length) {
+        box.innerHTML = "영향 공항 없음";
         return;
       }
 
-      box.innerHTML = allAdvisoriesCache.map(a => {
-        const facs = (a.facilityCodes || []).join(", ");
-        const airports = (a.airportCodes || []).join(", ");
-        const mainLabel = airports || a.controlElement || facs || "DCC";
+      box.innerHTML = airports.map(ap => {
+        const list = airportAdvisoryMap[ap] || [];
+        const advNums = list.map(a => "ADVZY " + a.advn).join(", ");
 
         return `
-          <div class="airport-item" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}')">
-            <b>${escapeHtml(mainLabel)}</b>
-            ${facs ? "<span style='color:#6b7280;'> / " + escapeHtml(facs) + "</span>" : ""}<br>
-            ADVZY ${escapeHtml(a.advn)} - ${escapeHtml(a.title || "").slice(0, 90)}
+          <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
+            <b>${escapeHtml(ap)}</b><br>
+            <span style="color:#6b7280;">${escapeHtml(advNums)}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function showAirportAdvisories(airportCode) {
+      const ap = String(airportCode || "").toUpperCase();
+      const box = document.getElementById("advisoryBox");
+
+      const matches = airportAdvisoryMap[ap] || [];
+
+      if (!matches.length) {
+        box.innerHTML = ap + " 관련 Advisory 없음";
+        return;
+      }
+
+      box.innerHTML = `
+        <div class="advisory-item">
+          <b>${escapeHtml(ap)} 관련 Advisory</b>
+        </div>
+      ` + matches.map(a => {
+        const terms = Array.from(new Set([
+          ap,
+          ...(a.controlFacilityCodes || []),
+          ...(a.facilityCodes || []),
+          ...(a.airportCodes || [])
+        ]));
+
+        return `
+          <div class="advisory-item">
+            <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+            ${highlightTerms(a.title || "", terms)}<br>
+            ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
+            ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
+            ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
+            ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
+            ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
+            <a href="#" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+            ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
           </div>
         `;
       }).join("");
@@ -708,13 +763,21 @@ L.control.layers(
         }
 
         box.innerHTML = data.advisories.map(a => {
+          const terms = Array.from(new Set([
+            ident,
+            ...(a.controlFacilityCodes || []),
+            ...(a.facilityCodes || []),
+            ...(a.airportCodes || [])
+          ]));
+
           return `
             <div class="advisory-item">
               <b>ADVZY ${escapeHtml(a.advn)}</b><br>
-              ${highlightTerms(a.title || "", [ident])}<br>
-              ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, [ident]) + "<br>" : ""}
-              ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, [ident]) + "<br>" : ""}
-              ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), [ident]) + "</div>" : ""}
+              ${highlightTerms(a.title || "", terms)}<br>
+              ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
+              ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
+              ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
+              ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
               <a href="#" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
               ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
             </div>
@@ -737,11 +800,11 @@ L.control.layers(
       const terms = [];
 
       if (selectedIdent) terms.push(selectedIdent);
+      (a.controlFacilityCodes || []).forEach(x => terms.push(x));
       (a.facilityCodes || []).forEach(x => terms.push(x));
       (a.airportCodes || []).forEach(x => terms.push(x));
 
       const uniqueTerms = Array.from(new Set(terms));
-
       const raw = a.rawText || a.message || a.title || "";
 
       document.getElementById("advisoryBox").innerHTML = `
@@ -749,6 +812,7 @@ L.control.layers(
           <b>${highlightTerms("ADVZY " + a.advn, uniqueTerms)}</b><br>
           ${highlightTerms(a.title || "", uniqueTerms)}<br>
           ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
+          ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
           ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, uniqueTerms) + "<br>" : ""}
           ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, uniqueTerms) + "<br>" : ""}
           <div class="detail-text">${highlightTerms(raw, uniqueTerms)}</div>
