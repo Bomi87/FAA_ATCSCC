@@ -395,12 +395,22 @@
     let selectedIdent = "";
     let currentRouteName = "";
 
-    let allAdvisoriesCache = [];
-    let artccLayerIndex = {};
-    let facilityAdvisoryMap = {};
-    let airportAdvisoryMap = {};
+   let allAdvisoriesCache = [];
+let artccLayerIndex = {};
+let facilityAdvisoryMap = {};
+let airportAdvisoryMap = {};
+
+let advisoryCacheLoadedAt = 0;
+const ADVISORY_CACHE_TTL_MS = 3 * 60 * 1000; // 3분
     let previousAdvisoryBoxHtml = "";
 let isAdvisoryDetailOpen = false;
+
+    function isAdvisoryCacheValid() {
+  if (!allAdvisoriesCache || !allAdvisoriesCache.length) return false;
+  if (!advisoryCacheLoadedAt) return false;
+
+  return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
+}
 
     /*******************************************************
      * Basic Utils
@@ -594,13 +604,13 @@ function updateFaaLink() {
           throw new Error(data.error || "Apps Script error");
         }
 
-        allAdvisoriesCache = data.advisories || [];
+      allAdvisoriesCache = data.advisories || [];
+advisoryCacheLoadedAt = Date.now();
 
-        buildFacilityAdvisoryMap();
-        buildAirportAdvisoryMap();
-        updateArtccAdvisoryColors();
-        renderAirportRestrictionList();
-
+buildFacilityAdvisoryMap();
+buildAirportAdvisoryMap();
+updateArtccAdvisoryColors();
+renderAirportRestrictionList();
       } catch (err) {
         console.error(err);
         box.innerHTML = "Advisory 전체 조회 실패: " + escapeHtml(err.message);
@@ -864,8 +874,18 @@ function updateFaaLink() {
       layer.setStyle(getArtccStyle("selected"));
       layer.bringToFront();
 
-      updateFaaLink();
-      loadAdvisoriesForFacility(ident);
+    updateFaaLink();
+
+if (isAdvisoryCacheValid()) {
+  renderAdvisoriesForFacilityFromCache(ident);
+} else {
+  document.getElementById("advisoryBox").innerHTML =
+    escapeHtml(ident) + " Advisory 최신 정보 새로고침 중...";
+
+  loadAllAdvisoriesForDate().then(() => {
+    renderAdvisoriesForFacilityFromCache(ident);
+  });
+}
     }
     function clearSelectedArtcc() {
   selectedLayer = null;
