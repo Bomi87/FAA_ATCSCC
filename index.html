@@ -322,7 +322,7 @@
       Open FAA Full List
     </a>
 
-<div id="routeStatus" class="status">Times in UTC</div>
+
     <div id="advisoryBox" class="advisory-box">ARTCC를 클릭하면 FAA Advisory 조회.</div>
 
 
@@ -1462,7 +1462,7 @@ if (isAdvisoryCacheValid()) {
       try {
         currentRouteName = aircraft;
         document.getElementById("selectedRoute").textContent = aircraft;
-       document.getElementById("routeStatus").textContent = "Times in UTC";
+    
         setActiveRouteButton(aircraft);
 
         routeLayer.clearLayers();
@@ -1494,12 +1494,11 @@ if (isAdvisoryCacheValid()) {
 
         map.setView([39.5, -98.5], 4);
 
-    document.getElementById("routeStatus").textContent = "Times in UTC";
+ 
 
       } catch (err) {
         console.error(err);
-        document.getElementById("routeStatus").textContent =
-          "Route 로드 실패: " + err.message;
+
       }
     }
 
@@ -1507,7 +1506,7 @@ if (isAdvisoryCacheValid()) {
       routeLayer.clearLayers();
       currentRouteName = "";
       document.getElementById("selectedRoute").textContent = "-";
-    document.getElementById("routeStatus").textContent = "Times in UTC";
+ 
       document.getElementById("btnHL8080").classList.remove("active");
       document.getElementById("btnHL8372").classList.remove("active");
     }
