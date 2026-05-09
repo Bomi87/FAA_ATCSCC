@@ -780,6 +780,45 @@ async function loadAllAdvisoriesForDate() {
       }).join("");
     }
 
+    function renderAdvisoriesForFacilityFromCache(ident) {
+  const box = document.getElementById("advisoryBox");
+  const code = String(ident || "").toUpperCase();
+
+  const matches = facilityAdvisoryMap[code] || [];
+
+  if (!matches.length) {
+    box.innerHTML = escapeHtml(code) + " 관련 Advisory 없음";
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="advisory-item">
+      <b>${escapeHtml(code)} 관련 Advisory</b>
+      <span style="color:#6b7280; font-size:11px; margin-left:6px;">(Times in UTC)</span>
+    </div>
+  ` + matches.map(a => {
+    const terms = Array.from(new Set([
+      code,
+      ...(a.controlFacilityCodes || []),
+      ...(a.facilityCodes || []),
+      ...(a.airportCodes || [])
+    ]));
+
+    return `
+      <div class="advisory-item">
+        <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+        ${highlightTerms(a.title || "", terms)}<br>
+        ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
+        ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
+        ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
+        ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
+        ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
+        <a href="#" onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">앱에서 자세히 보기</a>
+        ${a.detailUrl ? " | <a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
+      </div>
+    `;
+  }).join("");
+}
     async function loadAdvisoriesForFacility(ident) {
       const box = document.getElementById("advisoryBox");
 
@@ -1500,14 +1539,10 @@ document.addEventListener("click", function (e) {
     /*******************************************************
      * Init
      *******************************************************/
-    document.getElementById("dateInput").addEventListener("change", function () {
-      updateFaaLink();
-      loadAllAdvisoriesForDate();
-
-      if (selectedIdent) {
-        loadAdvisoriesForFacility(selectedIdent);
-      }
-    });
+document.getElementById("dateInput").addEventListener("change", function () {
+  updateFaaLink();
+  loadAllAdvisoriesForDate();
+});
 
 setDefaultAdvisoryDate();
 updateFaaLink();
