@@ -277,12 +277,14 @@ html, body {
   width: 1%;
 }
 
-.leaflet-control-ndb-airport {
+.ndb-fixed-control {
+  position: fixed;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 36px);
+  z-index: 1600;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: transparent;
-  box-shadow: none;
 }
 
 .ndb-search-input {
@@ -292,16 +294,17 @@ html, body {
   border-radius: 8px;
   background: #ffffff;
   color: #111827;
-  font-size: 16px;
+  font-size: 16px !important;
   font-weight: 700;
   text-align: center;
   text-transform: uppercase;
   box-shadow: 0 1px 5px rgba(0,0,0,0.25);
+  padding: 0 6px;
 }
 
-.leaflet-control-ndb-airport button {
-  min-width: 58px;
-  height: 36px;
+.ndb-fixed-control button {
+  min-width: 66px;
+  height: 38px;
   border: none;
   border-radius: 8px;
   background: #111827;
@@ -313,11 +316,11 @@ html, body {
   box-shadow: 0 1px 5px rgba(0,0,0,0.35);
 }
 
-.leaflet-control-ndb-airport button:hover {
+.ndb-fixed-control button:hover {
   background: #374151;
 }
 
-.leaflet-control-ndb-airport button.active {
+.ndb-fixed-control button.active {
   background: #16a34a;
 }
 
@@ -541,7 +544,12 @@ input {
   <button type="button" onclick="hideMobilePanels()">Map</button>
 </div>
 
-  <div id="map"></div>
+ <div id="ndbFixedControl" class="ndb-fixed-control">
+  <input id="ndbSearchInput" class="ndb-search-input" type="text" placeholder="ICAO" maxlength="4" />
+  <button id="ndbToggleBtn" type="button">NDB</button>
+</div>
+
+<div id="map"></div>
 
   <script>
     /*******************************************************
@@ -607,67 +615,7 @@ function fixMobileViewportAfterKeyboard() {
   setTimeout(reset, 350);
   setTimeout(reset, 800);
 }
-function createNdbAirportButton() {
-  const control = L.control({ position: "bottomright" });
 
-  control.onAdd = function () {
-    const container = L.DomUtil.create("div", "leaflet-control leaflet-control-ndb-airport");
-
-    const input = L.DomUtil.create("input", "ndb-search-input", container);
-    input.type = "text";
-    input.placeholder = "ICAO";
-    input.maxLength = 4;
-
-    const button = L.DomUtil.create("button", "", container);
-    button.type = "button";
-    button.textContent = "NDB";
-    button.title = "Show / Hide NDB Airports";
-
-    L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.disableScrollPropagation(container);
-
-    input.addEventListener("input", function () {
-      input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-      if (ndbLoaded && ndbVisible) {
-        filterNdbAirports(input.value);
-      }
-    });
-    input.addEventListener("blur", function () {
-  fixMobileViewportAfterKeyboard();
-});
-
-input.addEventListener("keydown", async function (e) {
-  if (e.key === "Enter") {
-    e.preventDefault();
-
-    if (!ndbLoaded || !ndbVisible) {
-      await toggleNdbAirports(button);
-    }
-
-    filterNdbAirports(input.value);
-
-    input.blur();
-    fixMobileViewportAfterKeyboard();
-  }
-});
-
-    L.DomEvent.on(button, "click", async function (e) {
-      L.DomEvent.stop(e);
-      await toggleNdbAirports(button);
-
-      if (ndbVisible) {
-        filterNdbAirports(input.value);
-      }
-    });
-
-    return container;
-  };
-
-  return control;
-}
-
-createNdbAirportButton().addTo(map);
 
     let selectedLayer = null;
     let selectedIdent = "";
@@ -1956,7 +1904,54 @@ function hideMobilePanels() {
 
   if (topPanel) topPanel.classList.remove("mobile-open");
   if (rightPanel) rightPanel.classList.remove("mobile-open");
-}         
+}  
+    function initNdbFixedControl() {
+  const input = document.getElementById("ndbSearchInput");
+  const button = document.getElementById("ndbToggleBtn");
+
+  if (!input || !button) return;
+
+  input.addEventListener("input", function () {
+    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    if (ndbLoaded && ndbVisible) {
+      filterNdbAirports(input.value);
+    }
+  });
+
+  input.addEventListener("keydown", async function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+
+      if (!ndbLoaded || !ndbVisible) {
+        await toggleNdbAirports(button);
+      }
+
+      filterNdbAirports(input.value);
+      input.blur();
+
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        map.invalidateSize(true);
+      }, 300);
+    }
+  });
+
+  input.addEventListener("blur", function () {
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+      map.invalidateSize(true);
+    }, 300);
+  });
+
+  button.addEventListener("click", async function () {
+    await toggleNdbAirports(button);
+
+    if (ndbVisible) {
+      filterNdbAirports(input.value);
+    }
+  });
+}
 map.on("click", function () {
   if (selectedIdent) {
     clearSelectedArtcc();
@@ -1978,6 +1973,7 @@ document.getElementById("dateInput").addEventListener("change", function () {
 
 setDefaultAdvisoryDate();
 updateFaaLink();
+initNdbFixedControl();
 
 loadArtccGeojson()
   .then(() => {
