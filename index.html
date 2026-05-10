@@ -1202,25 +1202,71 @@ buildFacilityAdvisoryMap();
 
 function getTfrStyle(feature) {
   const p = feature.properties || {};
+
   const legal = String(p.LEGAL || p.legal || "").toUpperCase();
   const title = String(p.TITLE || p.title || "").toUpperCase();
+  const allText = (legal + " " + title).toUpperCase();
 
-  if (legal.includes("SECURITY") || legal.includes("VIP") || title.includes("VIP")) {
+  // VIP = 빨간색
+  if (allText.includes("VIP")) {
     return {
       color: "#dc2626",
-      weight: 2,
+      weight: 2.2,
       opacity: 0.95,
       fillColor: "#ef4444",
+      fillOpacity: 0.20
+    };
+  }
+
+  // SECURITY = 주황색
+  if (allText.includes("SECURITY")) {
+    return {
+      color: "#ea580c",
+      weight: 2,
+      opacity: 0.95,
+      fillColor: "#f97316",
       fillOpacity: 0.18
     };
   }
 
+  // HAZARD / AIRSHOW = 파란색
+  if (
+    allText.includes("HAZARD") ||
+    allText.includes("HAZARDS") ||
+    allText.includes("AIRSHOW") ||
+    allText.includes("AIR SHOW")
+  ) {
+    return {
+      color: "#2563eb",
+      weight: 2,
+      opacity: 0.95,
+      fillColor: "#3b82f6",
+      fillOpacity: 0.16
+    };
+  }
+
+  // SPACE OPERATIONS = 핑크색
+  if (
+    allText.includes("SPACE") ||
+    allText.includes("SPACE OPERATIONS") ||
+    allText.includes("SPACE OPERATION")
+  ) {
+    return {
+      color: "#db2777",
+      weight: 2,
+      opacity: 0.95,
+      fillColor: "#ec4899",
+      fillOpacity: 0.17
+    };
+  }
+
+  // 기타 = 회색
   return {
-    color: "#7c3aed",
+    color: "#4b5563",
     weight: 1.8,
-    opacity: 0.9,
-    fillColor: "#a855f7",
-    fillOpacity: 0.13
+    opacity: 0.85,
+    fillColor: "#6b7280",
+    fillOpacity: 0.12
   };
 }
 
