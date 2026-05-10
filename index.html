@@ -1270,57 +1270,195 @@ function getTfrStyle(feature) {
   };
 }
 
-function formatTfrModified(raw) {
+
+
+function getTfrProp(p, keys, fallback = "") {
+  for (const key of keys) {
+    if (p[key] !== undefined && p[key] !== null && String(p[key]).trim() !== "") {
+      return String(p[key]).trim();
+    }
+  }
+  return fallback;
+}
+
+function formatTfrNotam(raw) {
   const s = String(raw || "").trim();
+
+  // 예: 6/9130-1-FDC-F → FDC 6/9130
+  const m = s.match(/(\d\/\d{3,5}).*?FDC/i);
+  if (m) return "FDC " + m[1];
+
+  // 예: FDC 6/9130
+  const m2 = s.match(/FDC\s+(\d\/\d{3,5})/i);
+  if (m2) return "FDC " + m2[1];
+
+  // 예: 6/9130
+  const m3 = s.match(/(\d\/\d{3,5})/);
+  if (m3) return "FDC " + m3[1];
+
+  return s;
+}
+
+function formatTfrDateTime(raw) {
+  const s = String(raw || "").trim();
+
+  if (!s) return "";
+
+  // 예: 202605130015 → 0015Z, 13MAY
   const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+  if (m) {
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const mon = months[Number(m[2]) - 1] || m[2];
+    return `${m[4]}${m[5]}Z, ${Number(m[3])}${mon}`;
+  }
 
-  if (!m) return s;
+  // 예: 2026-05-13T00:15:00Z
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):?(\d{2})/);
+  if (iso) {
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const mon = months[Number(iso[2]) - 1] || iso[2];
+    return `${iso[4]}${iso[5]}Z, ${Number(iso[3])}${mon}`;
+  }
 
-  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}Z`;
+  return s;
+}
+
+function extractTfrLocationTitle(rawTitle) {
+  const title = String(rawTitle || "").trim();
+
+  // 예:
+  // Anchorage, AK, Tuesday, May 12, 2026 through Tuesday, May 12, 2026 Local
+  // → Anchorage, AK, Tuesday
+  const m = title.match(/^(.+?,\s*[A-Z]{2},\s*[A-Za-z]+)/);
+  if (m) return m[1];
+
+  // fallback: through 앞까지만
+  return title
+    .replace(/\s+through\s+.*$/i, "")
+    .replace(/\s+Local\s*$/i, "")
+    .trim();
+}
+
+function getTfrStartEndFromProperties(p) {
+  const startRaw = getTfrProp(p, [
+    "START_DATE",
+    "START_DATETIME",
+    "START_TIME",
+    "EFFECTIVE_START",
+    "EFFECTIVE_DATETIME",
+    "EFFECTIVE",
+    "VALID_FROM",
+    "VALIDFROM",
+    "BEGIN_DATE",
+    "BEGIN_DATETIME"
+  ]);
+
+  const endRaw = getTfrProp(p, [
+    "END_DATE",
+    "END_DATETIME",
+    "END_TIME",
+    "EFFECTIVE_END",
+    "EXPIRATION_DATETIME",
+    "EXPIRE_DATE",
+    "EXPIRE_DATETIME",
+    "EXPIRATION",
+    "VALID_TO",
+    "VALIDTO",
+    "END_DATE_TIME"
+  ]);
+
+  return {
+    start: formatTfrDateTime(startRaw),
+    end: formatTfrDateTime(endRaw)
+  };
 }
 
 function buildTfrPopupHtml(feature) {
   const p = feature.properties || {};
 
-  const title = p.TITLE || p.title || "FAA TFR";
-  const notam = p.NOTAM_KEY || p.notamId || p.NOTAM_ID || "";
-  const artcc = p.CNS_LOCATION_ID || "";
-  const state = p.STATE || "";
-  const legal = p.LEGAL || "";
-  const modified = formatTfrModified(p.LAST_MODIFICATION_DATETIME || "");
-  const detailUrl = p.detailUrl || "";
+  const rawTitle = getTfrProp(p, ["TITLE", "title"], "FAA TFR");
+  const title = extractTfrLocationTitle(rawTitle);
 
-  const rows = [];
+  const rawNotam = getTfrProp(p, [
+    "NOTAM_KEY",
+    "notamId",
+    "NOTAM_ID",
+    "NOTAM",
+    "id"
+  ]);
+
+  const notam = formatTfrNotam(rawNotam);
+
+  const artcc = getTfrProp(p, [
+    "CNS_LOCATION_ID",
+    "ARTCC",
+    "FACILITY",
+    "facility"
+  ]);
+
+  const state = getTfrProp(p, [
+    "STATE",
+    "state"
+  ]);
+
+  const type = getTfrProp(p, [
+    "LEGAL",
+    "legal",
+    "TYPE",
+    "type"
+  ]);
+
+  const times = getTfrStartEndFromProperties(p);
+
+  const detailUrl = getTfrProp(p, [
+    "detailUrl",
+    "DETAIL_URL",
+    "url"
+  ]);
+
+  let html = `<div class="popup-body">`;
+
+  html += `<div class="popup-title">${escapeHtml(title)}</div>`;
+
+  html += `<div class="popup-section"><table>`;
 
   if (notam) {
-    rows.push({ key: "NOTAM", value: escapeHtml(notam) });
+    html += `<tr><td>NOTAM</td><td>${escapeHtml(notam)}</td></tr>`;
+  }
+
+  if (times.start) {
+    html += `<tr><td>Start</td><td>${escapeHtml(times.start)}</td></tr>`;
+  }
+
+  if (times.end) {
+    html += `<tr><td>End</td><td>${escapeHtml(times.end)}</td></tr>`;
   }
 
   if (artcc) {
-    rows.push({ key: "ARTCC", value: escapeHtml(artcc) });
+    html += `<tr><td>ARTCC</td><td>${escapeHtml(artcc)}</td></tr>`;
   }
 
   if (state) {
-    rows.push({ key: "State", value: escapeHtml(state) });
+    html += `<tr><td>State</td><td>${escapeHtml(state)}</td></tr>`;
   }
 
-  if (legal) {
-    rows.push({ key: "Type", value: escapeHtml(legal) });
-  }
-
-  if (modified) {
-    rows.push({ key: "Modified", value: escapeHtml(modified) });
+  if (type) {
+    html += `<tr><td>Type</td><td>${escapeHtml(type)}</td></tr>`;
   }
 
   if (detailUrl) {
-    rows.push({
-      key: "FAA",
-      value: `<a href="${escapeHtml(detailUrl)}" target="_blank">Open Detail</a>`
-    });
+    html += `<tr><td>FAA</td><td><a href="${escapeHtml(detailUrl)}" target="_blank">Open Detail</a></td></tr>`;
   }
 
-  return buildPopupHtml(title, "", rows);
+  html += `</table></div>`;
+  html += `</div>`;
+
+  return html;
 }
+
+
+
+    
 
 async function loadTfrLayer() {
   const res = await fetch(TFR_BACKEND_URL, {
