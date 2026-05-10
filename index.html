@@ -1346,24 +1346,42 @@ async function loadTfrLayer() {
   const geoLayer = L.geoJSON(data, {
     style: getTfrStyle,
 
-    onEachFeature: function (feature, layer) {
-      layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
+   onEachFeature: function (feature, layer) {
+  layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
 
-      layer.on("mouseover", function () {
-        if (layer.setStyle) {
-          layer.setStyle({
-            weight: 3,
-            fillOpacity: 0.28
-          });
-        }
-      });
-
-      layer.on("mouseout", function () {
-        if (layer.setStyle) {
-          layer.setStyle(getTfrStyle(feature));
-        }
+  layer.on("mouseover", function (e) {
+    if (layer.setStyle) {
+      layer.setStyle({
+        weight: 3,
+        fillOpacity: 0.28
       });
     }
+
+    // 마우스 올리면 상세정보 자동 표시
+    layer.openPopup(e.latlng);
+  });
+
+  layer.on("mousemove", function (e) {
+    // 마우스 위치를 따라 팝업 위치 갱신
+    if (layer.getPopup && layer.getPopup()) {
+      layer.getPopup().setLatLng(e.latlng);
+    }
+  });
+
+  layer.on("mouseout", function () {
+    if (layer.setStyle) {
+      layer.setStyle(getTfrStyle(feature));
+    }
+
+    // 마우스 벗어나면 팝업 닫기
+    layer.closePopup();
+  });
+
+  layer.on("click", function (e) {
+    // 클릭해도 상세정보 표시 유지
+    layer.openPopup(e.latlng);
+  });
+}
   });
 
   geoLayer.addTo(tfrLayer);
