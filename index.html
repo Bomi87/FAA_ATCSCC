@@ -1370,33 +1370,22 @@ function extractTfrLocationTitle(rawTitle) {
 function getTfrStartEndFromProperties(p) {
   const startRaw = getTfrProp(p, [
     "BEGINNING_DATE_AND_TIME",
-    "BEGINNING DATE AND TIME",
     "Beginning Date and Time",
+    "beginningDateTime",
     "BEGINNING",
     "Beginning",
-    "BEGIN_DATE",
-    "BEGIN_DATETIME",
     "START_DATE",
-    "START_DATETIME",
-    "START_TIME",
-    "EFFECTIVE_START",
-    "VALID_FROM",
-    "VALIDFROM"
+    "START_DATETIME"
   ]);
 
   const endRaw = getTfrProp(p, [
     "ENDING_DATE_AND_TIME",
-    "ENDING DATE AND TIME",
     "Ending Date and Time",
+    "endingDateTime",
     "ENDING",
     "Ending",
     "END_DATE",
-    "END_DATETIME",
-    "END_TIME",
-    "EFFECTIVE_END",
-    "EXPIRATION_DATETIME",
-    "VALID_TO",
-    "VALIDTO"
+    "END_DATETIME"
   ]);
 
   return {
