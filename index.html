@@ -135,6 +135,25 @@ html, body {
 .clear-btn.active:hover {
   background: #b91c1c;
 }
+    .tfr-prenotice-link {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 7px 4px;
+  border-radius: 8px;
+  background: #e5e7eb;
+  color: #111827;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tfr-prenotice-link:hover {
+  background: #d1d5db;
+}
 
     .selected-box {
       background: #f3f4f6;
@@ -517,10 +536,18 @@ input {
       <button id="btnHL8080" class="route-btn" onclick="loadRouteByAircraft('HL8080')">HL8080</button>
       <button id="btnHL8372" class="route-btn" onclick="loadRouteByAircraft('HL8372')">HL8372</button>
     </div>
-    <button class="clear-btn" onclick="clearRoute()">Clear Route</button>
-    <button id="tfrToggleBtn" class="clear-btn" onclick="toggleTfrLayer()">TFR OFF</button>
+<button class="clear-btn" onclick="clearRoute()">Clear Route</button>
+<button id="tfrToggleBtn" class="clear-btn" onclick="toggleTfrLayer()">TFR OFF</button>
 
-    <div class="selected-box">
+<a
+  class="tfr-prenotice-link"
+  href="https://www.faasafety.gov/SPANS/notices_public.aspx"
+  target="_blank"
+>
+  TFR pre-Notice
+</a>
+
+<div class="selected-box">
       Selected ARTCC: <b id="selectedArtcc">-</b><br>
       Name: <span id="selectedName">-</span><br>
       Route: <b id="selectedRoute">-</b>
