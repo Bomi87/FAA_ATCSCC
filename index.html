@@ -584,6 +584,18 @@ const map = L.map("map", {
   preferCanvas: true,
   worldCopyJump: false
 }).setView([39.5, -98.5], window.innerWidth <= 767 ? 3 : 4);
+map.createPane("artccPane");
+map.getPane("artccPane").style.zIndex = 410;
+
+map.createPane("tfrPane");
+map.getPane("tfrPane").style.zIndex = 430;
+
+map.createPane("routePane");
+map.getPane("routePane").style.zIndex = 450;
+
+map.createPane("ndbPane");
+map.getPane("ndbPane").style.zIndex = 460;
+    
     const streetMap = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
       {
@@ -1476,8 +1488,9 @@ async function loadTfrLayer() {
 
   tfrLayer.clearLayers();
 
-  const geoLayer = L.geoJSON(data, {
-    style: getTfrStyle,
+const geoLayer = L.geoJSON(data, {
+  pane: "tfrPane",
+  style: getTfrStyle,
 
   onEachFeature: function (feature, layer) {
   layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
@@ -1509,11 +1522,12 @@ async function loadTfrLayer() {
     }
   });
 
-  layer.on("click", function (e) {
-    // 클릭하면 팝업 고정
-    isClickedPopup = true;
-    layer.openPopup(e.latlng);
-  });
+layer.on("click", function (e) {
+  L.DomEvent.stopPropagation(e);
+
+  isClickedPopup = true;
+  layer.openPopup(e.latlng);
+});
 
   layer.on("popupclose", function () {
     // 사용자가 X 누르거나 다른 팝업 열어서 닫히면 고정 상태 해제
@@ -1683,10 +1697,12 @@ if (window.innerWidth <= 767) {
 
       const data = await res.json();
 
-      const geoLayer = L.geoJSON(data, {
-        style: function () {
-          return getArtccStyle("normal");
-        },
+     const geoLayer = L.geoJSON(data, {
+  pane: "artccPane",
+
+  style: function () {
+    return getArtccStyle("normal");
+  },
 
         onEachFeature: function (feature, layer) {
           const p = feature.properties || {};
