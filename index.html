@@ -1048,19 +1048,22 @@ buildFacilityAdvisoryMap();
   box.innerHTML = airports.map(ap => {
     const list = airportAdvisoryMap[ap] || [];
 
-    const advNums = list.map(a => {
-      const firCodes = Array.from(new Set(
-        (a.facilityCodes || [])
-          .map(code => String(code || "").toUpperCase())
-          .filter(code => /^Z[A-Z]{2}$/.test(code))
-      )).join("/");
+const advNums = list.map((a, idx) => {
+  const firCodes = Array.from(new Set(
+    (a.facilityCodes || [])
+      .map(code => String(code || "").toUpperCase())
+      .filter(code => /^Z[A-Z]{2}$/.test(code))
+  )).join("/");
 
-return "<span class='advzy-chip'>ADVZY " + escapeHtml(a.advn) +
-  (firCodes
-    ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
-    : "") +
-  "</span>";
-    }).join(", ");
+  const comma = idx < list.length - 1 ? "," : "";
+
+  return "<span class='advzy-chip'>ADVZY " + escapeHtml(a.advn) +
+    (firCodes
+      ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
+      : "") +
+    comma +
+    "</span>";
+}).join(" ");
 
     return `
       <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
