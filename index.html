@@ -1453,6 +1453,100 @@ function getTfrAltitudeText(p) {
 
   return lowerText || upperText;
 }
+
+function formatTfrEffectivePart(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+
+  if (/effective\s+immediately/i.test(s)) {
+    return "Effective Immediately";
+  }
+
+  if (/until\s+further\s+notice/i.test(s)) {
+    return "Until further notice";
+  }
+
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+  // 예: 2026-05-08T04:59:00 → 08MAY, 0459Z
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):?(\d{2})/);
+  if (m) {
+    const mon = months[Number(m[2]) - 1] || m[2];
+    const day = String(Number(m[3])).padStart(2, "0");
+    return `${day}${mon}, ${m[4]}${m[5]}Z`;
+  }
+
+  // 예: 202605080459 → 08MAY, 0459Z
+  m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+  if (m) {
+    const mon = months[Number(m[2]) - 1] || m[2];
+    const day = String(Number(m[3])).padStart(2, "0");
+    return `${day}${mon}, ${m[4]}${m[5]}Z`;
+  }
+
+  // 예: May 8, 2026 at 0459 UTC → 08MAY, 0459Z
+  m = s.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*\d{4}\s+at\s+(\d{4})\s+UTC/i);
+  if (m) {
+    const monthMap = {
+      JANUARY: "JAN",
+      FEBRUARY: "FEB",
+      MARCH: "MAR",
+      APRIL: "APR",
+      MAY: "MAY",
+      JUNE: "JUN",
+      JULY: "JUL",
+      AUGUST: "AUG",
+      SEPTEMBER: "SEP",
+      OCTOBER: "OCT",
+      NOVEMBER: "NOV",
+      DECEMBER: "DEC"
+    };
+
+    const mon = monthMap[m[1].toUpperCase()] || m[1].toUpperCase().slice(0, 3);
+    const day = String(Number(m[2])).padStart(2, "0");
+    return `${day}${mon}, ${m[3]}Z`;
+  }
+
+  // 예: 0459Z, 8MAY → 08MAY, 0459Z
+  m = s.match(/^(\d{4})Z,\s*(\d{1,2})([A-Z]{3})$/i);
+  if (m) {
+    const day = String(Number(m[2])).padStart(2, "0");
+    return `${day}${m[3].toUpperCase()}, ${m[1]}Z`;
+  }
+
+  return s;
+}
+
+function getTfrEffectiveText(p) {
+  const startRaw = getTfrProp(p, [
+    "BEGINNING_DATE_AND_TIME",
+    "Beginning Date and Time",
+    "beginningDateTime",
+    "BEGINNING",
+    "Beginning",
+    "START_DATE",
+    "START_DATETIME"
+  ]);
+
+  const endRaw = getTfrProp(p, [
+    "ENDING_DATE_AND_TIME",
+    "Ending Date and Time",
+    "endingDateTime",
+    "ENDING",
+    "Ending",
+    "END_DATE",
+    "END_DATETIME"
+  ]);
+
+  const start = formatTfrEffectivePart(startRaw);
+  const end = formatTfrEffectivePart(endRaw);
+
+  if (start && end) return `${start} ~ ${end}`;
+  if (start) return start;
+  if (end) return `Until ${end}`;
+
+  return "";
+}
     
 function buildTfrPopupHtml(feature) {
   const p = feature.properties || {};
@@ -1478,12 +1572,10 @@ function buildTfrPopupHtml(feature) {
     html += `<tr><td>NOTAM</td><td>${escapeHtml(notam)}</td></tr>`;
   }
 
- if (times.start) {
-  html += `<tr><td>Start</td><td>${escapeHtml(times.start)}</td></tr>`;
-}
+const effective = getTfrEffectiveText(p);
 
-if (times.end) {
-  html += `<tr><td>End</td><td>${escapeHtml(times.end)}</td></tr>`;
+if (effective) {
+  html += `<tr><td>Effective</td><td>${escapeHtml(effective)}</td></tr>`;
 }
 
 const altitude = p.altitudeText || "";
