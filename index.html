@@ -18,6 +18,8 @@ html, body {
   font-family: Arial, sans-serif;
   overflow: hidden;
   overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
   #map {
@@ -352,10 +354,22 @@ html, body {
   font-weight: 700;
 }
 
-    .advzy-chip {
-  display: inline-block;
-  white-space: nowrap;
+  .advzy-chip {
+  display: inline;
+  white-space: normal;
   margin-right: 4px;
+}
+
+.advzy-prefix {
+  white-space: nowrap;
+}
+
+.airport-artcc {
+  color: #2563eb;
+  font-weight: 700;
+  font-size: inherit;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ndb-label {
   background: transparent !important;
@@ -1071,12 +1085,13 @@ const advNums = list.map((a, idx) => {
 
   const comma = idx < list.length - 1 ? "," : "";
 
-  return "<span class='advzy-chip'>ADVZY " + escapeHtml(a.advn) +
-    (firCodes
-      ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
-      : "") +
-    comma +
-    "</span>";
+return "<span class='advzy-chip'>" +
+  "<span class='advzy-prefix'>ADVZY " + escapeHtml(a.advn) + "</span>" +
+  (firCodes
+    ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
+    : "") +
+  comma +
+  "</span>";
 }).join(" ");
 
     return `
