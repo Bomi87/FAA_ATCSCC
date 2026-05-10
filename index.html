@@ -1414,6 +1414,46 @@ function getTfrStartEndFromProperties(p) {
   };
 }
 
+function getTfrAltitudeText(p) {
+  const upper = p.VAL_DIST_VER_UPPER || p.valDistVerUpper || p.val_dist_ver_upper || "";
+  const upperUnit = p.UOM_DIST_VER_UPPER || p.uomDistVerUpper || p.uom_dist_ver_upper || "FT";
+  const upperCode = p.CODE_DIST_VER_UPPER || p.codeDistVerUpper || p.code_dist_ver_upper || "";
+
+  const lower = p.VAL_DIST_VER_LOWER || p.valDistVerLower || p.val_dist_ver_lower || "";
+  const lowerUnit = p.UOM_DIST_VER_LOWER || p.uomDistVerLower || p.uom_dist_ver_lower || "FT";
+  const lowerCode = p.CODE_DIST_VER_LOWER || p.codeDistVerLower || p.code_dist_ver_lower || "";
+
+  // 백엔드에서 이미 정리해서 내려주는 경우
+  if (p.altitudeText) return String(p.altitudeText);
+
+  if (!upper && !lower) return "";
+
+  let lowerText = "";
+  let upperText = "";
+
+  if (lower !== "") {
+    if (Number(lower) === 0) {
+      lowerText = "SFC";
+    } else {
+      lowerText = `${lower}${lowerUnit}`;
+    }
+  }
+
+  if (upper !== "") {
+    upperText = `${upper}${upperUnit}`;
+
+    if (upperCode) {
+      upperText += ` ${upperCode}`;
+    }
+  }
+
+  if (lowerText && upperText) {
+    return `${lowerText} - ${upperText}`;
+  }
+
+  return lowerText || upperText;
+}
+    
 function buildTfrPopupHtml(feature) {
   const p = feature.properties || {};
 
@@ -1438,17 +1478,25 @@ function buildTfrPopupHtml(feature) {
     html += `<tr><td>NOTAM</td><td>${escapeHtml(notam)}</td></tr>`;
   }
 
-  if (times.start) {
-    html += `<tr><td>Start</td><td>${escapeHtml(times.start)}</td></tr>`;
-  }
+ if (times.start) {
+  html += `<tr><td>Start</td><td>${escapeHtml(times.start)}</td></tr>`;
+}
 
-  if (times.end) {
-    html += `<tr><td>End</td><td>${escapeHtml(times.end)}</td></tr>`;
-  }
+if (times.end) {
+  html += `<tr><td>End</td><td>${escapeHtml(times.end)}</td></tr>`;
+}
 
-  if (artcc) {
-    html += `<tr><td>ARTCC</td><td>${escapeHtml(artcc)}</td></tr>`;
-  }
+const altitude = getTfrAltitudeText(p);
+
+if (altitude) {
+  html += `<tr><td>Altitude</td><td>${escapeHtml(altitude)}</td></tr>`;
+}
+
+if (artcc) {
+  html += `<tr><td>ARTCC</td><td>${escapeHtml(artcc)}</td></tr>`;
+}
+
+  
 
   if (type) {
     html += `<tr><td>Type</td><td>${escapeHtml(type)}</td></tr>`;
