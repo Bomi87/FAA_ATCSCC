@@ -1253,7 +1253,20 @@ function getBaseballTfrStyle() {
     fillOpacity: 0.16
   };
 }
+function formatBaseballGameStart(raw) {
+  const d = new Date(raw);
 
+  if (isNaN(d.getTime())) return "";
+
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const mon = months[d.getUTCMonth()];
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+
+  return `${day}${mon}, ${hh}${mm}Z`;
+}
 function buildBaseballTfrPopupHtml(feature) {
   const p = feature.properties || {};
 
@@ -1272,10 +1285,15 @@ if (p.teams) {
   html += `<tr><td>Teams</td><td>${escapeHtml(p.teams)}</td></tr>`;
 }
 
-  if (p.effectiveText) {
-    html += `<tr><td>Effective</td><td>${escapeHtml(p.effectiveText)}</td></tr>`;
-  }
+const gameStartText = formatBaseballGameStart(p.gameDateUtc);
 
+if (gameStartText) {
+  html += `<tr><td>Game Start</td><td>${escapeHtml(gameStartText)}</td></tr>`;
+}
+
+if (p.effectiveText) {
+  html += `<tr><td>Effective</td><td>${escapeHtml(p.effectiveText)}</td></tr>`;
+}
   if (p.radiusNm) {
     html += `<tr><td>Radius</td><td>${escapeHtml(p.radiusNm + "NM")}</td></tr>`;
   }
