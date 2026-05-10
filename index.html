@@ -1362,13 +1362,14 @@ function extractTfrLocationTitle(rawTitle) {
   const title = String(rawTitle || "").trim();
 
   // 예:
-  // Anchorage, AK, Tuesday, May 12, 2026 through ...
-  // → Anchorage
-  const m = title.match(/^([^,]+)/);
-  if (m) return m[1].trim();
+  // Clear, AK, Sunday, March 8, 2026 through ...
+  // → Clear, AK
+  const cityState = title.match(/^([^,]+),\s*([A-Z]{2})\b/i);
+  if (cityState) {
+    return cityState[1].trim() + ", " + cityState[2].trim().toUpperCase();
+  }
 
   return title
-    .replace(/,\s*[A-Z]{2}\b.*$/i, "")
     .replace(/,\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b.*$/i, "")
     .replace(/\s+through\s+.*$/i, "")
     .replace(/\s+Local\s*$/i, "")
