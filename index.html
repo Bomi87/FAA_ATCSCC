@@ -1360,18 +1360,18 @@ function extractTfrLocationTitle(rawTitle) {
   const title = String(rawTitle || "").trim();
 
   // 예:
-  // Anchorage, AK, Tuesday, May 12, 2026 through Tuesday, May 12, 2026 Local
-  // → Anchorage, AK, Tuesday
-  const m = title.match(/^(.+?,\s*[A-Z]{2},\s*[A-Za-z]+)/);
-  if (m) return m[1];
+  // Anchorage, AK, Tuesday, May 12, 2026 through ...
+  // → Anchorage
+  const m = title.match(/^([^,]+)/);
+  if (m) return m[1].trim();
 
-  // fallback: through 앞까지만
   return title
+    .replace(/,\s*[A-Z]{2}\b.*$/i, "")
+    .replace(/,\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b.*$/i, "")
     .replace(/\s+through\s+.*$/i, "")
     .replace(/\s+Local\s*$/i, "")
     .trim();
 }
-
 function getTfrStartEndFromProperties(p) {
   const startRaw = getTfrProp(p, [
     "BEGINNING_DATE_AND_TIME",
@@ -1402,50 +1402,21 @@ function getTfrStartEndFromProperties(p) {
 function buildTfrPopupHtml(feature) {
   const p = feature.properties || {};
 
-  const rawTitle = getTfrProp(p, ["TITLE", "title"], "FAA TFR");
+  const rawTitle = p.TITLE || p.title || "FAA TFR";
   const title = extractTfrLocationTitle(rawTitle);
 
-  const rawNotam = getTfrProp(p, [
-    "NOTAM_KEY",
-    "notamId",
-    "NOTAM_ID",
-    "NOTAM",
-    "id"
-  ]);
-
+  const rawNotam = p.NOTAM_KEY || p.notamId || p.NOTAM_ID || "";
   const notam = formatTfrNotam(rawNotam);
 
-  const artcc = getTfrProp(p, [
-    "CNS_LOCATION_ID",
-    "ARTCC",
-    "FACILITY",
-    "facility"
-  ]);
-
-  const state = getTfrProp(p, [
-    "STATE",
-    "state"
-  ]);
-
-  const type = getTfrProp(p, [
-    "LEGAL",
-    "legal",
-    "TYPE",
-    "type"
-  ]);
+  const artcc = p.CNS_LOCATION_ID || "";
+  const type = p.LEGAL || "";
 
   const times = getTfrStartEndFromProperties(p);
-
-  const detailUrl = getTfrProp(p, [
-    "detailUrl",
-    "DETAIL_URL",
-    "url"
-  ]);
+  const detailUrl = p.detailUrl || "";
 
   let html = `<div class="popup-body">`;
 
   html += `<div class="popup-title">${escapeHtml(title)}</div>`;
-
   html += `<div class="popup-section"><table>`;
 
   if (notam) {
@@ -1464,10 +1435,6 @@ function buildTfrPopupHtml(feature) {
     html += `<tr><td>ARTCC</td><td>${escapeHtml(artcc)}</td></tr>`;
   }
 
-  if (state) {
-    html += `<tr><td>State</td><td>${escapeHtml(state)}</td></tr>`;
-  }
-
   if (type) {
     html += `<tr><td>Type</td><td>${escapeHtml(type)}</td></tr>`;
   }
@@ -1481,7 +1448,6 @@ function buildTfrPopupHtml(feature) {
 
   return html;
 }
-
 
 
     
