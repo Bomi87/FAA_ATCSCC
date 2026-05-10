@@ -351,6 +351,12 @@ html, body {
   color: #2563eb;
   font-weight: 700;
 }
+
+    .advzy-chip {
+  display: inline-block;
+  white-space: nowrap;
+  margin-right: 4px;
+}
 .ndb-label {
   background: transparent !important;
   border: none !important;
@@ -1049,10 +1055,11 @@ buildFacilityAdvisoryMap();
           .filter(code => /^Z[A-Z]{2}$/.test(code))
       )).join("/");
 
-      return "ADVZY " + escapeHtml(a.advn) +
-        (firCodes
-          ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
-          : "");
+return "<span class='advzy-chip'>ADVZY " + escapeHtml(a.advn) +
+  (firCodes
+    ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
+    : "") +
+  "</span>";
     }).join(", ");
 
     return `
