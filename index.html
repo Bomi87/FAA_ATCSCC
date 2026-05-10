@@ -1277,6 +1277,23 @@ function formatBaseballGameStart(raw) {
 
   return `${day}${mon}, ${hh}${mm}Z`;
 }
+function formatBaseballGameStatus(status) {
+  const s = String(status || "").trim();
+
+  if (!s) return "";
+
+  const upper = s.toUpperCase();
+
+  if (upper === "FINAL") return "Game Ended";
+  if (upper === "SCHEDULED") return "Scheduled";
+  if (upper === "IN PROGRESS") return "In Progress";
+  if (upper === "POSTPONED") return "Postponed";
+  if (upper === "CANCELLED" || upper === "CANCELED") return "Cancelled";
+  if (upper === "DELAYED") return "Delayed";
+
+  return s;
+}
+    
 function buildBaseballTfrPopupHtml(feature) {
   const p = feature.properties || {};
 
@@ -1312,9 +1329,11 @@ if (p.effectiveText) {
     html += `<tr><td>Altitude</td><td>${escapeHtml(p.altitudeText)}</td></tr>`;
   }
 
-  if (p.gameStatus) {
-    html += `<tr><td>Status</td><td>${escapeHtml(p.gameStatus)}</td></tr>`;
-  }
+const gameStatusText = formatBaseballGameStatus(p.gameStatus);
+
+if (gameStatusText) {
+  html += `<tr><td>Status</td><td>${escapeHtml(gameStatusText)}</td></tr>`;
+}
 
   html += `</table></div>`;
   html += `</div>`;
