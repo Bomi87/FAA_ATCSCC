@@ -1330,7 +1330,41 @@ async function loadBaseballTfrLayer() {
   return data;
 }
 
-    
+    function getArtccStyle(status) {
+  if (status === "selected") {
+    return {
+      color: "#ef4444",
+      weight: 3,
+      opacity: 1,
+      fillColor: "#ef4444",
+      fillOpacity: 0.20
+    };
+  }
+
+  if (status === "hasAdvisory") {
+    return {
+      color: "#f97316",
+      weight: 2.4,
+      opacity: 1,
+      fillColor: "#f97316",
+      fillOpacity: 0.16
+    };
+  }
+
+  return {
+    color: "#6b7280",
+    weight: 1.5,
+    opacity: 0.75,
+    fillColor: "#64748b",
+    fillOpacity: 0.05
+  };
+}
+
+function getLayerStatusByCode(code) {
+  if (selectedIdent && code === selectedIdent) return "selected";
+  if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) return "hasAdvisory";
+  return "normal";
+}
     /*******************************************************
      * ARTCC Layer
      *******************************************************/
