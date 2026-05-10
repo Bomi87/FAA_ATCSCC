@@ -128,6 +128,13 @@ html, body {
     .clear-btn:hover {
       background: #4b5563;
     }
+    .clear-btn.active {
+  background: #dc2626;
+}
+
+.clear-btn.active:hover {
+  background: #b91c1c;
+}
 
     .selected-box {
       background: #f3f4f6;
@@ -511,6 +518,7 @@ input {
       <button id="btnHL8372" class="route-btn" onclick="loadRouteByAircraft('HL8372')">HL8372</button>
     </div>
     <button class="clear-btn" onclick="clearRoute()">Clear Route</button>
+    <button id="tfrToggleBtn" class="clear-btn" onclick="toggleTfrLayer()">TFR OFF</button>
 
     <div class="selected-box">
       Selected ARTCC: <b id="selectedArtcc">-</b><br>
@@ -553,9 +561,13 @@ input {
     /*******************************************************
      * Config
      *******************************************************/
-    const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
-    const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
-    const FAA_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxJHTvujHAaWbSBO0Z5lEvShfSAIKuNi4jeKrQCm7D3dy9Au8uaix0aPhzV9g43ojOFhw/exec";
+   const ROUTE_BASE_URL = "https://bomi87.github.io/FLIGHT_MAP/live/";
+const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
+
+const FAA_APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbxcsNhZ3iH0kFtlULBtkbgs_aRA1AXwQ8J39rqx1SBWoTnhQKOGHWxAFiVG-I6zDwqa/exec";
+
+const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
     const ROUTE_REFERENCE_LON = -100;
 
@@ -588,8 +600,12 @@ const map = L.map("map", {
       }
     );
 const artccGroup = L.featureGroup().addTo(map);
+const tfrLayer = L.featureGroup();
 const routeLayer = L.featureGroup().addTo(map);
 const ndbLayer = L.featureGroup();
+
+let tfrVisible = false;
+let tfrLoaded = false;
 
 let ndbVisible = false;
 let ndbLoaded = false;
@@ -1179,6 +1195,200 @@ buildFacilityAdvisoryMap();
     /*******************************************************
      * ARTCC Layer
      *******************************************************/
+
+    /*******************************************************
+ * FAA TFR Layer
+ *******************************************************/
+
+function getTfrStyle(feature) {
+  const p = feature.properties || {};
+  const legal = String(p.LEGAL || p.legal || "").toUpperCase();
+  const title = String(p.TITLE || p.title || "").toUpperCase();
+
+  if (legal.includes("SECURITY") || legal.includes("VIP") || title.includes("VIP")) {
+    return {
+      color: "#dc2626",
+      weight: 2,
+      opacity: 0.95,
+      fillColor: "#ef4444",
+      fillOpacity: 0.18
+    };
+  }
+
+  return {
+    color: "#7c3aed",
+    weight: 1.8,
+    opacity: 0.9,
+    fillColor: "#a855f7",
+    fillOpacity: 0.13
+  };
+}
+
+function formatTfrModified(raw) {
+  const s = String(raw || "").trim();
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+
+  if (!m) return s;
+
+  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}Z`;
+}
+
+function buildTfrPopupHtml(feature) {
+  const p = feature.properties || {};
+
+  const title = p.TITLE || p.title || "FAA TFR";
+  const notam = p.NOTAM_KEY || p.notamId || p.NOTAM_ID || "";
+  const artcc = p.CNS_LOCATION_ID || "";
+  const state = p.STATE || "";
+  const legal = p.LEGAL || "";
+  const modified = formatTfrModified(p.LAST_MODIFICATION_DATETIME || "");
+  const detailUrl = p.detailUrl || "";
+
+  const rows = [];
+
+  if (notam) {
+    rows.push({ key: "NOTAM", value: escapeHtml(notam) });
+  }
+
+  if (artcc) {
+    rows.push({ key: "ARTCC", value: escapeHtml(artcc) });
+  }
+
+  if (state) {
+    rows.push({ key: "State", value: escapeHtml(state) });
+  }
+
+  if (legal) {
+    rows.push({ key: "Type", value: escapeHtml(legal) });
+  }
+
+  if (modified) {
+    rows.push({ key: "Modified", value: escapeHtml(modified) });
+  }
+
+  if (detailUrl) {
+    rows.push({
+      key: "FAA",
+      value: `<a href="${escapeHtml(detailUrl)}" target="_blank">Open Detail</a>`
+    });
+  }
+
+  return buildPopupHtml(title, "", rows);
+}
+
+async function loadTfrLayer() {
+  const res = await fetch(TFR_BACKEND_URL, {
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    throw new Error("TFR backend load failed: " + res.status);
+  }
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.error || "TFR backend error");
+  }
+
+  if (!data.features || !Array.isArray(data.features)) {
+    throw new Error("Invalid TFR GeoJSON");
+  }
+
+  tfrLayer.clearLayers();
+
+  const geoLayer = L.geoJSON(data, {
+    style: getTfrStyle,
+
+    onEachFeature: function (feature, layer) {
+      layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
+
+      layer.on("mouseover", function () {
+        if (layer.setStyle) {
+          layer.setStyle({
+            weight: 3,
+            fillOpacity: 0.28
+          });
+        }
+      });
+
+      layer.on("mouseout", function () {
+        if (layer.setStyle) {
+          layer.setStyle(getTfrStyle(feature));
+        }
+      });
+    }
+  });
+
+  geoLayer.addTo(tfrLayer);
+
+  tfrLoaded = true;
+
+  return data;
+}
+
+async function toggleTfrLayer() {
+  const button = document.getElementById("tfrToggleBtn");
+
+  try {
+    if (tfrVisible) {
+      if (map.hasLayer(tfrLayer)) {
+        map.removeLayer(tfrLayer);
+      }
+
+      tfrVisible = false;
+
+      if (button) {
+        button.textContent = "TFR OFF";
+        button.classList.remove("active");
+      }
+
+      return;
+    }
+
+    if (!tfrLoaded) {
+      if (button) {
+        button.disabled = true;
+        button.textContent = "TFR Loading";
+      }
+
+      await loadTfrLayer();
+
+      if (button) {
+        button.disabled = false;
+      }
+    }
+
+    if (!map.hasLayer(tfrLayer)) {
+      map.addLayer(tfrLayer);
+    }
+
+    tfrLayer.bringToFront();
+    routeLayer.bringToFront();
+
+    if (map.hasLayer(ndbLayer)) {
+      ndbLayer.bringToFront();
+    }
+
+    tfrVisible = true;
+
+    if (button) {
+      button.textContent = "TFR ON";
+      button.classList.add("active");
+    }
+
+  } catch (err) {
+    console.error(err);
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "TFR OFF";
+      button.classList.remove("active");
+    }
+
+    alert("TFR 로드 실패: " + err.message);
+  }
+}
     function getArtccStyle(status) {
       if (status === "selected") {
         return {
