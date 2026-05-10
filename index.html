@@ -585,6 +585,8 @@ const map = L.map("map", {
   preferCanvas: true,
   worldCopyJump: false
 }).setView([39.5, -98.5], window.innerWidth <= 767 ? 3 : 4);
+
+    
 map.createPane("artccPane");
 map.getPane("artccPane").style.zIndex = 410;
 
@@ -599,6 +601,9 @@ map.getPane("routePane").style.zIndex = 450;
 
 map.createPane("ndbPane");
 map.getPane("ndbPane").style.zIndex = 460;
+    const artccRenderer = L.svg({ pane: "artccPane" });
+const tfrRenderer = L.svg({ pane: "tfrPane" });
+const baseballTfrRenderer = L.svg({ pane: "baseballTfrPane" });
     
     const streetMap = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
@@ -1233,13 +1238,15 @@ function buildBaseballTfrPopupHtml(feature) {
   html += `<div class="popup-title">${escapeHtml(p.stadiumName || p.title || "Baseball Stadium TFR")}</div>`;
   html += `<div class="popup-section"><table>`;
 
-  if (p.eventType) {
-    html += `<tr><td>Event</td><td>${escapeHtml(p.eventType)}</td></tr>`;
-  }
+if (p.eventType) {
+  html += `<tr><td>Event</td><td>${escapeHtml(p.eventType)}</td></tr>`;
+}
 
-  if (p.teams) {
-    html += `<tr><td>Teams</td><td>${escapeHtml(p.teams)}</td></tr>`;
-  }
+html += `<tr><td>Basis</td><td><a href="https://tfr.faa.gov/tfr3/?page=detail_0_0367" target="_blank">FDC 0/0367</a></td></tr>`;
+
+if (p.teams) {
+  html += `<tr><td>Teams</td><td>${escapeHtml(p.teams)}</td></tr>`;
+}
 
   if (p.effectiveText) {
     html += `<tr><td>Effective</td><td>${escapeHtml(p.effectiveText)}</td></tr>`;
@@ -1280,9 +1287,10 @@ async function loadBaseballTfrLayer() {
 
   baseballTfrLayer.clearLayers();
 
-  const geoLayer = L.geoJSON(data, {
-    pane: "baseballTfrPane",
-    style: getBaseballTfrStyle,
+ const geoLayer = L.geoJSON(data, {
+  pane: "baseballTfrPane",
+  renderer: baseballTfrRenderer,
+  style: getBaseballTfrStyle,
 
     onEachFeature: function (feature, layer) {
       layer.bindPopup(buildBaseballTfrPopupHtml(feature), POPUP_OPTIONS);
@@ -1791,6 +1799,7 @@ async function loadTfrLayer() {
 
 const geoLayer = L.geoJSON(data, {
   pane: "tfrPane",
+  renderer: tfrRenderer,
   style: getTfrStyle,
 
   onEachFeature: function (feature, layer) {
@@ -1955,9 +1964,26 @@ async function toggleTfrLayer() {
       updateArtccAdvisoryColors();
 
       layer.setStyle(getArtccStyle("selected"));
-      layer.bringToFront();
+ 
 
     updateFaaLink();
+    if (tfrVisible) {
+  if (map.hasLayer(tfrLayer)) {
+    tfrLayer.bringToFront();
+  }
+
+  if (map.hasLayer(baseballTfrLayer)) {
+    baseballTfrLayer.bringToFront();
+  }
+
+  if (map.hasLayer(routeLayer)) {
+    routeLayer.bringToFront();
+  }
+
+  if (map.hasLayer(ndbLayer)) {
+    ndbLayer.bringToFront();
+  }
+}  
 
 if (isAdvisoryCacheValid()) {
   renderAdvisoriesForFacilityFromCache(ident);
@@ -1997,8 +2023,9 @@ if (window.innerWidth <= 767) {
 
       const data = await res.json();
 
-     const geoLayer = L.geoJSON(data, {
+const geoLayer = L.geoJSON(data, {
   pane: "artccPane",
+  renderer: artccRenderer,
 
   style: function () {
     return getArtccStyle("normal");
