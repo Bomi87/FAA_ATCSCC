@@ -135,26 +135,24 @@ html, body {
 .clear-btn.active:hover {
   background: #b91c1c;
 }
-    .tfr-prenotice-link {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
+.tfr-prenotice-text {
   margin-top: 6px;
-  padding: 7px 4px;
-  border-radius: 8px;
-  background: #e5e7eb;
-  color: #111827;
+  margin-bottom: 4px;
   font-size: 11px;
-  font-weight: 800;
   text-align: center;
-  text-decoration: none;
-  cursor: pointer;
 }
 
-.tfr-prenotice-link:hover {
-  background: #d1d5db;
+.tfr-prenotice-text a {
+  color: #6d28d9;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
+.tfr-prenotice-text a:hover {
+  color: #4c1d95;
+}
+
+    
     .selected-box {
       background: #f3f4f6;
       border-radius: 8px;
@@ -539,13 +537,11 @@ input {
 <button class="clear-btn" onclick="clearRoute()">Clear Route</button>
 <button id="tfrToggleBtn" class="clear-btn" onclick="toggleTfrLayer()">TFR OFF</button>
 
-<a
-  class="tfr-prenotice-link"
-  href="https://www.faasafety.gov/SPANS/notices_public.aspx"
-  target="_blank"
->
-  TFR pre-Notice
-</a>
+<div class="tfr-prenotice-text">
+  <a href="https://www.faasafety.gov/SPANS/notices_public.aspx" target="_blank">
+    TFR pre-Notice
+  </a>
+</div>
 
 <div class="selected-box">
       Selected ARTCC: <b id="selectedArtcc">-</b><br>
