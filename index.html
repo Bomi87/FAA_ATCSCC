@@ -565,7 +565,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbySsepajOk_YM4cHswV85ZsuGZmzMtYvTuM8Ol_iyurtCO8Z0NvPMqoW7HFYOtBDpV5-Q/exec";
+  "https://script.google.com/macros/s/AKfycbz-6Uw3rvsHiH0XBbzfZREvAtXbunozNMuYmbeu6UuIA7ZP25ubNpf_ftYAJwNjhXzz1g/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -1321,12 +1321,12 @@ function formatTfrDateTime(raw) {
   }
 
   // 예: 2026-05-13T00:15:00Z → 0015Z, 13MAY
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):?(\d{2})/);
-  if (iso) {
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    const mon = months[Number(iso[2]) - 1] || iso[2];
-    return `${iso[4]}${iso[5]}Z, ${Number(iso[3])}${mon}`;
-  }
+const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):?(\d{2})/);
+if (iso) {
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const mon = months[Number(iso[2]) - 1] || iso[2];
+  return `${iso[4]}${iso[5]}Z, ${Number(iso[3])}${mon}`;
+}
 
   // 예: May 11, 2026 at 1700 UTC → 1700Z, 11MAY
   const faaText = s.match(
