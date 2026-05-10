@@ -565,9 +565,10 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxrQroEI4tQemZErlAGXqucAM_zYOH-QHwVOH5MbmH4wEjVMOYkLnKycGEol3FigTp_EA/exec";
+  "https://script.google.com/macros/s/AKfycbwaydodxoc6WNT05GNy1jfZ-GVuefI185xp_9C14Zxk4fEczntyO09hhvGXEjGoLCkQTA/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
+const BASEBALL_TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=baseballTfr";
 
     const ROUTE_REFERENCE_LON = -100;
 
@@ -589,6 +590,9 @@ map.getPane("artccPane").style.zIndex = 410;
 
 map.createPane("tfrPane");
 map.getPane("tfrPane").style.zIndex = 430;
+
+map.createPane("baseballTfrPane");
+map.getPane("baseballTfrPane").style.zIndex = 435;
 
 map.createPane("routePane");
 map.getPane("routePane").style.zIndex = 450;
@@ -613,11 +617,14 @@ map.getPane("ndbPane").style.zIndex = 460;
     );
 const artccGroup = L.featureGroup().addTo(map);
 const tfrLayer = L.featureGroup();
+const baseballTfrLayer = L.featureGroup();
 const routeLayer = L.featureGroup().addTo(map);
 const ndbLayer = L.featureGroup();
 
 let tfrVisible = false;
 let tfrLoaded = false;
+
+let baseballTfrLoaded = false;
 
 let ndbVisible = false;
 let ndbLoaded = false;
@@ -1204,6 +1211,126 @@ buildFacilityAdvisoryMap();
       `;
     }
 
+/*******************************************************
+ * Baseball / Stadium TFR Layer
+ *******************************************************/
+
+function getBaseballTfrStyle() {
+  return {
+    color: "#2563eb",
+    weight: 2,
+    opacity: 0.95,
+    fillColor: "#3b82f6",
+    fillOpacity: 0.14
+  };
+}
+
+function buildBaseballTfrPopupHtml(feature) {
+  const p = feature.properties || {};
+
+  let html = `<div class="popup-body">`;
+
+  html += `<div class="popup-title">${escapeHtml(p.stadiumName || p.title || "Baseball Stadium TFR")}</div>`;
+  html += `<div class="popup-section"><table>`;
+
+  if (p.eventType) {
+    html += `<tr><td>Event</td><td>${escapeHtml(p.eventType)}</td></tr>`;
+  }
+
+  if (p.teams) {
+    html += `<tr><td>Teams</td><td>${escapeHtml(p.teams)}</td></tr>`;
+  }
+
+  if (p.effectiveText) {
+    html += `<tr><td>Effective</td><td>${escapeHtml(p.effectiveText)}</td></tr>`;
+  }
+
+  if (p.radiusNm) {
+    html += `<tr><td>Radius</td><td>${escapeHtml(p.radiusNm + "NM")}</td></tr>`;
+  }
+
+  if (p.altitudeText) {
+    html += `<tr><td>Altitude</td><td>${escapeHtml(p.altitudeText)}</td></tr>`;
+  }
+
+  if (p.gameStatus) {
+    html += `<tr><td>Status</td><td>${escapeHtml(p.gameStatus)}</td></tr>`;
+  }
+
+  html += `</table></div>`;
+  html += `</div>`;
+
+  return html;
+}
+
+async function loadBaseballTfrLayer() {
+  const res = await fetch(BASEBALL_TFR_BACKEND_URL, {
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    throw new Error("Baseball TFR backend load failed: " + res.status);
+  }
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.error || "Baseball TFR backend error");
+  }
+
+  baseballTfrLayer.clearLayers();
+
+  const geoLayer = L.geoJSON(data, {
+    pane: "baseballTfrPane",
+    style: getBaseballTfrStyle,
+
+    onEachFeature: function (feature, layer) {
+      layer.bindPopup(buildBaseballTfrPopupHtml(feature), POPUP_OPTIONS);
+
+      let isClickedPopup = false;
+
+      layer.on("mouseover", function (e) {
+        if (layer.setStyle) {
+          layer.setStyle({
+            weight: 3,
+            fillOpacity: 0.25
+          });
+        }
+
+        if (!isClickedPopup) {
+          layer.openPopup(e.latlng);
+        }
+      });
+
+      layer.on("mouseout", function () {
+        if (layer.setStyle) {
+          layer.setStyle(getBaseballTfrStyle());
+        }
+
+        if (!isClickedPopup) {
+          layer.closePopup();
+        }
+      });
+
+      layer.on("click", function (e) {
+        L.DomEvent.stopPropagation(e);
+        isClickedPopup = true;
+        layer.openPopup(e.latlng);
+      });
+
+      layer.on("popupclose", function () {
+        isClickedPopup = false;
+      });
+    }
+  });
+
+  geoLayer.addTo(baseballTfrLayer);
+  baseballTfrLoaded = true;
+
+  return data;
+}
+
+    
     /*******************************************************
      * ARTCC Layer
      *******************************************************/
@@ -1687,9 +1814,16 @@ async function toggleTfrLayer() {
   const button = document.getElementById("tfrToggleBtn");
 
   try {
+    // =========================
+    // TFR OFF
+    // =========================
     if (tfrVisible) {
       if (map.hasLayer(tfrLayer)) {
         map.removeLayer(tfrLayer);
+      }
+
+      if (map.hasLayer(baseballTfrLayer)) {
+        map.removeLayer(baseballTfrLayer);
       }
 
       tfrVisible = false;
@@ -1702,13 +1836,26 @@ async function toggleTfrLayer() {
       return;
     }
 
-    if (!tfrLoaded) {
+    // =========================
+    // TFR ON
+    // =========================
+    if (!tfrLoaded || !baseballTfrLoaded) {
       if (button) {
         button.disabled = true;
         button.textContent = "TFR Loading";
       }
 
-      await loadTfrLayer();
+      const tasks = [];
+
+      if (!tfrLoaded) {
+        tasks.push(loadTfrLayer());
+      }
+
+      if (!baseballTfrLoaded) {
+        tasks.push(loadBaseballTfrLayer());
+      }
+
+      await Promise.all(tasks);
 
       if (button) {
         button.disabled = false;
@@ -1719,8 +1866,17 @@ async function toggleTfrLayer() {
       map.addLayer(tfrLayer);
     }
 
+    if (!map.hasLayer(baseballTfrLayer)) {
+      map.addLayer(baseballTfrLayer);
+    }
+
+    // 표시 순서
     tfrLayer.bringToFront();
-    routeLayer.bringToFront();
+    baseballTfrLayer.bringToFront();
+
+    if (map.hasLayer(routeLayer)) {
+      routeLayer.bringToFront();
+    }
 
     if (map.hasLayer(ndbLayer)) {
       ndbLayer.bringToFront();
@@ -1745,36 +1901,6 @@ async function toggleTfrLayer() {
     alert("TFR 로드 실패: " + err.message);
   }
 }
-    function getArtccStyle(status) {
-      if (status === "selected") {
-        return {
-          color: "#ef4444",
-          weight: 3,
-          opacity: 1,
-          fillColor: "#ef4444",
-          fillOpacity: 0.20
-        };
-      }
-
-      if (status === "hasAdvisory") {
-        return {
-          color: "#f97316",
-          weight: 2.4,
-          opacity: 1,
-          fillColor: "#f97316",
-          fillOpacity: 0.16
-        };
-      }
-
-      return {
-        color: "#6b7280",
-        weight: 1.5,
-        opacity: 0.75,
-        fillColor: "#64748b",
-        fillOpacity: 0.05
-      };
-    }
-
     function getLayerStatusByCode(code) {
       if (selectedIdent && code === selectedIdent) return "selected";
       if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) return "hasAdvisory";
