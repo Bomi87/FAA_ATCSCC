@@ -402,13 +402,27 @@ html, body {
     cursor: pointer;
   }
 
-  .mobile-panel-buttons button:nth-child(2) {
-    background: #2563eb;
-  }
+.mobile-panel-buttons button {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 6px;
+  background: #6b7280;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
 
-  .mobile-panel-buttons button:nth-child(3) {
-    background: #64748b;
-  }
+.mobile-panel-buttons button.active {
+  background: #2563eb;
+  box-shadow: 0 0 0 2px #ffffff, 0 2px 8px rgba(37, 99, 235, 0.45);
+  transform: translateY(-1px);
+}
+
+.mobile-panel-buttons button:not(.active) {
+  opacity: 0.78;
+}
 
 .top-panel,
 .right-panel {
@@ -573,10 +587,10 @@ input {
       날짜별 Advisory 조회 중...
     </div>
   </div>
-  <div class="mobile-panel-buttons">
-  <button type="button" onclick="showMobilePanel('main')">Info</button>
-  <button type="button" onclick="showMobilePanel('airports')">Airports</button>
-  <button type="button" onclick="hideMobilePanels()">Map</button>
+<div class="mobile-panel-buttons">
+  <button id="mobileBtnMain" type="button" data-panel="main" onclick="showMobilePanel('main')">Info</button>
+  <button id="mobileBtnAirports" type="button" data-panel="airports" onclick="showMobilePanel('airports')">Airports</button>
+  <button id="mobileBtnMap" type="button" data-panel="map" onclick="hideMobilePanels()">Map</button>
 </div>
 
  <div id="ndbFixedControl" class="ndb-fixed-control">
@@ -2741,7 +2755,31 @@ document.addEventListener("click", function (e) {
   isAdvisoryDetailOpen = false;
 });
 
- function showMobilePanel(panelName) {
+function setMobilePanelButtonActive(panelName) {
+  const buttons = document.querySelectorAll(".mobile-panel-buttons button");
+
+  buttons.forEach(btn => {
+    btn.classList.remove("active");
+
+    if (btn.dataset.panel === panelName) {
+      btn.classList.add("active");
+    }
+  });
+}
+      
+function setMobilePanelButtonActive(panelName) {
+  const buttons = document.querySelectorAll(".mobile-panel-buttons button");
+
+  buttons.forEach(btn => {
+    btn.classList.remove("active");
+
+    if (btn.dataset.panel === panelName) {
+      btn.classList.add("active");
+    }
+  });
+}
+
+function showMobilePanel(panelName) {
   const topPanel = document.querySelector(".top-panel");
   const rightPanel = document.querySelector(".right-panel");
 
@@ -2755,6 +2793,8 @@ document.addEventListener("click", function (e) {
   if (panelName === "airports" && rightPanel) {
     rightPanel.classList.add("mobile-open");
   }
+
+  setMobilePanelButtonActive(panelName);
 }
 
 function hideMobilePanels() {
@@ -2763,6 +2803,7 @@ function hideMobilePanels() {
 
   if (topPanel) topPanel.classList.remove("mobile-open");
   if (rightPanel) rightPanel.classList.remove("mobile-open");
+  setMobilePanelButtonActive("map");
 }  
 
 function initNdbFixedControl() {
