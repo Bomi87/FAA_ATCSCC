@@ -565,7 +565,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxcsNhZ3iH0kFtlULBtkbgs_aRA1AXwQ8J39rqx1SBWoTnhQKOGHWxAFiVG-I6zDwqa/exec";
+  "https://script.google.com/macros/s/AKfycbzKIovMwiCf3ZeTcmlx-yVsWQvboq9d7SiijjIWbnLnOu022ptavrj-PTX73zG7MdJgrQ/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -1303,6 +1303,11 @@ function formatTfrDateTime(raw) {
   const s = String(raw || "").trim();
 
   if (!s) return "";
+
+  // 예: Valid until further notice / Until further notice
+  if (/until\s+further\s+notice/i.test(s)) {
+    return "Until further notice";
+  }
 
   // 예: 202605130015 → 0015Z, 13MAY
   const compact = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/);
