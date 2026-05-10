@@ -565,7 +565,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzKIovMwiCf3ZeTcmlx-yVsWQvboq9d7SiijjIWbnLnOu022ptavrj-PTX73zG7MdJgrQ/exec";
+  "https://script.google.com/macros/s/AKfycbySsepajOk_YM4cHswV85ZsuGZmzMtYvTuM8Ol_iyurtCO8Z0NvPMqoW7HFYOtBDpV5-Q/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -1304,7 +1304,10 @@ function formatTfrDateTime(raw) {
 
   if (!s) return "";
 
-  // 예: Valid until further notice / Until further notice
+  if (/effective\s+immediately/i.test(s)) {
+    return "Effective Immediately";
+  }
+
   if (/until\s+further\s+notice/i.test(s)) {
     return "Until further notice";
   }
@@ -1325,7 +1328,7 @@ function formatTfrDateTime(raw) {
     return `${iso[4]}${iso[5]}Z, ${Number(iso[3])}${mon}`;
   }
 
-  // 예: May 13, 2026 at 0015 UTC → 0015Z, 13MAY
+  // 예: May 11, 2026 at 1700 UTC → 1700Z, 11MAY
   const faaText = s.match(
     /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*(\d{4})\s+at\s+(\d{4})\s+UTC/i
   );
@@ -1355,7 +1358,6 @@ function formatTfrDateTime(raw) {
 
   return s;
 }
-
 function extractTfrLocationTitle(rawTitle) {
   const title = String(rawTitle || "").trim();
 
