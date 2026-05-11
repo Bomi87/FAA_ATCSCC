@@ -764,7 +764,110 @@ let isAdvisoryDetailOpen = false;
   return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
 }
 
+function parseVolcanicLayerValidTimeUtc(advisory, validTimeText) {
+  const s = String(validTimeText || "").trim().toUpperCase();
 
+  // 예: 11/1030Z
+  const m = s.match(/^(\d{2})\/(\d{4})Z$/);
+  if (!m) return null;
+
+  const day = Number(m[1]);
+  const hhmm = m[2];
+  const hour = Number(hhmm.slice(0, 2));
+  const min = Number(hhmm.slice(2, 4));
+
+  const dateText = String(advisory && advisory.date ? advisory.date : getDateValue());
+  const base = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!base) return null;
+
+  const year = Number(base[1]);
+  const month = Number(base[2]);
+
+  const d = new Date(Date.UTC(year, month - 1, day, hour, min, 0));
+
+  if (isNaN(d.getTime())) return null;
+
+  return d;
+}
+
+function buildVolcanicLayerTimeline(advisory, ash) {
+  const layers = (ash.layers || [])
+    .filter(layer => {
+      if (!layer || layer.noAshExpected) return false;
+      if (!Array.isArray(layer.polygon) || layer.polygon.length < 3) return false;
+      return true;
+    })
+    .map(layer => {
+      return {
+        layer: layer,
+        validDate: parseVolcanicLayerValidTimeUtc(advisory, layer.validTime)
+      };
+    });
+
+  // validTime 있는 forecast layer만 시간순 정렬
+  const timedLayers = layers
+    .filter(x => x.validDate)
+    .sort((a, b) => a.validDate.getTime() - b.validDate.getTime());
+
+  const firstForecastTime = timedLayers.length ? timedLayers[0].validDate : null;
+
+  return layers.map(item => {
+    const label = String(item.layer.label || "").toUpperCase();
+
+    // EST/OBS는 첫 forecast 시간 전까지만 표시
+    if (!item.validDate && (label.includes("EST") || label.includes("OBS"))) {
+      return {
+        layer: item.layer,
+        visibleUntil: firstForecastTime
+      };
+    }
+
+    // +6HR, +12HR 등은 다음 forecast 시간 전까지 표시
+    if (item.validDate) {
+      let nextValidDate = null;
+
+      for (let i = 0; i < timedLayers.length; i++) {
+        if (timedLayers[i].layer === item.layer && timedLayers[i + 1]) {
+          nextValidDate = timedLayers[i + 1].validDate;
+          break;
+        }
+      }
+
+      return {
+        layer: item.layer,
+        validDate: item.validDate,
+        visibleUntil: nextValidDate || item.validDate
+      };
+    }
+
+    // 시간 없는 기타 layer는 안전하게 표시
+    return {
+      layer: item.layer,
+      visibleUntil: null
+    };
+  });
+}
+
+function shouldShowVolcanicLayerByTimeline(entry) {
+  const now = Date.now();
+
+  const layer = entry.layer || {};
+  const label = String(layer.label || "").toUpperCase();
+
+  // EST/OBS는 첫 forecast 시간 전까지만 표시
+  if ((label.includes("EST") || label.includes("OBS")) && entry.visibleUntil) {
+    return now < entry.visibleUntil.getTime();
+  }
+
+  // forecast layer
+  // 다음 forecast 시간이 있으면 그 전까지 표시
+  // 마지막 forecast는 자기 validTime 전까지만 표시
+  if (entry.visibleUntil) {
+    return now < entry.visibleUntil.getTime();
+  }
+
+  return true;
+}
 
  function showVolcanicAshOnMap(advisory) {
   clearVolcanicAshLayers();
@@ -777,9 +880,12 @@ let isAdvisoryDetailOpen = false;
 
   const boundsList = [];
 
-  ash.layers.forEach(layer => {
-    if (!layer || layer.noAshExpected) return;
-    if (!Array.isArray(layer.polygon) || layer.polygon.length < 3) return;
+ const timelineLayers = buildVolcanicLayerTimeline(advisory, ash);
+
+timelineLayers.forEach(entry => {
+  if (!shouldShowVolcanicLayerByTimeline(entry)) return;
+
+  const layer = entry.layer;
 
     // 백엔드 polygon은 [lat, lon] 형태
     const latLngs = layer.polygon
