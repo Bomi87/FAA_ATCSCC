@@ -1582,9 +1582,9 @@ const sectionClass = isVolcanicAsh
         return;
       }
 
-  box.innerHTML = `
+box.innerHTML = `
   <div class="advisory-item">
-    <b>${escapeHtml(ap)} 관련 Advisory</b>
+    <b class="section-header section-header-airports">${escapeHtml(ap)} 관련 Advisory</b>
     <span style="color:#6b7280; font-size:11px; margin-left:6px;">(Times in UTC)</span>
   </div>
 ` + matches.map(a => {
