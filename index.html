@@ -3432,19 +3432,18 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
     return false;
   }
 
-  const shortAirportName = getShortAirportNameFromGeocodeName(
-    airport && airport.name,
-    searchCode
-  );
+const address = airport && airport.name
+  ? String(airport.name)
+  : "";
 
-  matchedMarker.bindPopup(
-    buildPopupHtml(
-      searchCode,
-      shortAirportName ? escapeHtml(shortAirportName) : "",
-      []
-    ),
-    POPUP_OPTIONS
-  );
+matchedMarker.bindPopup(
+  buildPopupHtml(
+    searchCode,
+    address ? escapeHtml(address) : "",
+    []
+  ),
+  POPUP_OPTIONS
+);
 
   matchedMarker.openPopup();
 
@@ -3474,10 +3473,10 @@ const hasNdbMarker = await showNdbMarkerIfExistsByIcao(code, airport);
 if (!hasNdbMarker) {
   L.popup()
     .setLatLng([airport.lat, airport.lon])
-    .setContent(
-      "<b>" + escapeHtml(code) + "</b><br>" +
-      escapeHtml(getShortAirportNameFromGeocodeName(airport.name, code))
-    )
+.setContent(
+  "<b>" + escapeHtml(code) + "</b><br>" +
+  escapeHtml(airport.name || code)
+)
     .openOn(map);
 }
 
