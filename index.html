@@ -3242,6 +3242,83 @@ function hideMobilePanels() {
   setMobilePanelButtonActive("map");
 }  
 
+async function geocodeAirportByIcao(icao) {
+  const code = String(icao || "").trim().toUpperCase();
+
+  if (!/^[A-Z]{4}$/.test(code)) {
+    return null;
+  }
+
+  const url =
+    "https://nominatim.openstreetmap.org/search" +
+    "?format=json" +
+    "&limit=1" +
+    "&q=" + encodeURIComponent(code + " airport");
+
+  const res = await fetch(url, {
+    headers: {
+      "Accept": "application/json"
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error("Airport search failed: " + res.status);
+  }
+
+  const data = await res.json();
+
+  if (!Array.isArray(data) || !data.length) {
+    return null;
+  }
+
+  const item = data[0];
+
+  const lat = Number(item.lat);
+  const lon = Number(item.lon);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+
+  return {
+    icao: code,
+    lat: lat,
+    lon: lon,
+    name: item.display_name || code
+  };
+}
+
+async function zoomToAirportByIcao(icao) {
+  const code = String(icao || "").trim().toUpperCase();
+
+  if (!/^[A-Z]{4}$/.test(code)) {
+    return;
+  }
+
+  try {
+    const airport = await geocodeAirportByIcao(code);
+
+    if (!airport) {
+      alert(code + " 공항 위치를 찾을 수 없습니다.");
+      return;
+    }
+
+    map.setView([airport.lat, airport.lon], 10);
+
+    L.popup()
+      .setLatLng([airport.lat, airport.lon])
+      .setContent(
+        "<b>" + escapeHtml(code) + "</b><br>" +
+        escapeHtml(airport.name)
+      )
+      .openOn(map);
+
+  } catch (err) {
+    console.error(err);
+    alert(code + " 공항 검색 실패: " + err.message);
+  }
+}
+    
 function initNdbFixedControl() {
   const input = document.getElementById("ndbSearchInput");
   const button = document.getElementById("ndbToggleBtn");
@@ -3280,11 +3357,20 @@ function initNdbFixedControl() {
         return;
       }
 
-      if (!ndbLoaded || !ndbVisible) {
-        await toggleNdbAirports(button);
-      }
+const code = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 
-      applyNdbSearch(value);
+if (/^[A-Z]{4}$/.test(code)) {
+  input.value = code;
+  await zoomToAirportByIcao(code);
+  fixMobileViewportAfterKeyboard();
+  return;
+}
+
+if (!ndbLoaded || !ndbVisible) {
+  await toggleNdbAirports(button);
+}
+
+applyNdbSearch(value);
     });
 
   } else {
@@ -3292,28 +3378,50 @@ function initNdbFixedControl() {
       applyNdbSearch(input.value);
     });
 
-    input.addEventListener("keydown", async function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
+input.addEventListener("keydown", async function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
 
-        if (!ndbLoaded || !ndbVisible) {
-          await toggleNdbAirports(button);
-        }
+    const code = input.value.trim().toUpperCase();
 
-        applyNdbSearch(input.value);
-      }
-    });
+    if (/^[A-Z]{4}$/.test(code)) {
+      await zoomToAirportByIcao(code);
+      fixMobileViewportAfterKeyboard();
+      return;
+    }
+
+    if (!ndbLoaded || !ndbVisible) {
+      await toggleNdbAirports(button);
+    }
+
+    applyNdbSearch(input.value);
+  }
+});
   }
 
-  button.addEventListener("click", async function () {
-    await toggleNdbAirports(button);
+button.addEventListener("click", async function () {
+  const code = String(input.value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
 
-    if (ndbVisible) {
-      applyNdbSearch(input.value);
-    }
-  });
-}
+  // ICAO 4-letter가 입력되어 있으면 공항으로 zoom-in
+  if (/^[A-Z]{4}$/.test(code)) {
+    input.value = code;
+    await zoomToAirportByIcao(code);
+    fixMobileViewportAfterKeyboard();
+    return;
+  }
 
+  // 4-letter가 아니면 기존 NDB 토글 기능 유지
+  await toggleNdbAirports(button);
+
+  if (ndbVisible) {
+    applyNdbSearch(input.value);
+  }
+});
+  }
 
 
     
