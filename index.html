@@ -3303,20 +3303,91 @@ async function zoomToAirportByIcao(icao) {
       return;
     }
 
-    map.setView([airport.lat, airport.lon], 10);
+map.setView([airport.lat, airport.lon], 10);
 
-    L.popup()
-      .setLatLng([airport.lat, airport.lon])
-      .setContent(
-        "<b>" + escapeHtml(code) + "</b><br>" +
-        escapeHtml(airport.name)
-      )
-      .openOn(map);
+// NDB 리스트에 같은 ICAO가 있으면 해당 NDB 아이콘도 표시
+const hasNdbMarker = await showNdbMarkerIfExistsByIcao(code);
+
+// NDB marker가 없을 때만 일반 공항 popup 표시
+if (!hasNdbMarker) {
+  L.popup()
+    .setLatLng([airport.lat, airport.lon])
+    .setContent(
+      "<b>" + escapeHtml(code) + "</b><br>" +
+      escapeHtml((airport.name || code).split(",")[0])
+    )
+    .openOn(map);
+}
 
   } catch (err) {
     console.error(err);
     alert(code + " 공항 검색 실패: " + err.message);
   }
+}
+
+async function showNdbMarkerIfExistsByIcao(code) {
+  const searchCode = String(code || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
+
+  if (!/^[A-Z]{4}$/.test(searchCode)) {
+    return false;
+  }
+
+  const button = document.getElementById("ndbToggleBtn");
+
+  if (!ndbLoaded) {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Loading";
+    }
+
+    await loadNdbAirports();
+    ndbLoaded = true;
+
+    if (button) {
+      button.disabled = false;
+    }
+  }
+
+  if (!map.hasLayer(ndbLayer)) {
+    map.addLayer(ndbLayer);
+  }
+
+  ndbVisible = true;
+
+  if (button) {
+    button.textContent = "NDB ON";
+    button.classList.add("active");
+  }
+
+  ndbLayer.clearLayers();
+
+  let matchedMarker = null;
+
+  ndbMarkers.forEach(marker => {
+    const name = String(marker._ndbName || "").toUpperCase();
+
+    if (name.includes(searchCode)) {
+      marker.addTo(ndbLayer);
+
+      if (!matchedMarker) {
+        matchedMarker = marker;
+      }
+    }
+  });
+
+  if (matchedMarker) {
+    if (matchedMarker.openPopup) {
+      matchedMarker.openPopup();
+    }
+
+    return true;
+  }
+
+  return false;
 }
     
 function initNdbFixedControl() {
