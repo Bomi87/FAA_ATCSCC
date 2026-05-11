@@ -910,9 +910,9 @@ function buildVolcanicPopupHtml(advisory, ash, layer) {
 
   const baseTimeValue = ash.baseVaDtg || ash.estVaDtg || ash.obsVaDtg || "";
 
-  const layerTitle = layer.validTime
-    ? `${layer.label || "VA CLD"} (=${layer.validTime})`
-    : (layer.label || "VA CLD");
+const layerTitle = layer.validTime
+  ? `${layer.label || "VA CLD"} (= ${layer.validTime})`
+  : (layer.label || "VA CLD");
 
   return `
     <div style="min-width:230px; font-size:12px; line-height:1.45;">
