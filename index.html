@@ -1575,7 +1575,9 @@ const sectionClass = isVolcanicAsh
       const ap = String(airportCode || "").toUpperCase();
       const box = document.getElementById("advisoryBox");
 
-      const matches = airportAdvisoryMap[ap] || [];
+     const matches = (airportAdvisoryMap[ap] || [])
+  .slice()
+  .sort((a, b) => Number(b.advn) - Number(a.advn));
 
       if (!matches.length) {
         box.innerHTML = ap + " 관련 Advisory 없음";
