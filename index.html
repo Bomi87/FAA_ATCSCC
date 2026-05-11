@@ -1530,9 +1530,25 @@ function showDccInfoAdvisorySummary(advn, skipZoom) {
     ...(a.airportCodes || [])
   ]));
 
+  const isVolcanicAsh =
+  Boolean(a.volcanicAsh) ||
+  String(a.title || "").toUpperCase().includes("VOLCANIC") ||
+  String(a.title || "").toUpperCase().includes("VA ADVISORY") ||
+  String(a.rawText || a.message || "").toUpperCase().includes("VA ADVISORY") ||
+  String(a.rawText || a.message || "").toUpperCase().includes("VOLCANO:") ||
+  String(a.rawText || a.message || "").toUpperCase().includes("OBS VA CLD") ||
+  String(a.rawText || a.message || "").toUpperCase().includes("FCST VA CLD");
+
+const sectionTitle = isVolcanicAsh
+  ? "DCC / Volcanic Ash"
+  : "DCC / Info Advisory";
+
+const sectionClass = isVolcanicAsh
+  ? "section-header-volcanic"
+  : "section-header-info";
   box.innerHTML = `
     <div class="advisory-item">
-      <b>DCC / Info Advisory</b>
+      <span class="section-header ${sectionClass}">${sectionTitle}</span>
       <span style="color:#6b7280; font-size:11px; margin-left:6px;">(Times in UTC)</span>
     </div>
 
