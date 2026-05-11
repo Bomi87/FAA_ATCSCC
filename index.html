@@ -67,6 +67,28 @@ html, body {
       margin-bottom: 10px;
       color: #111827;
     }
+    .section-header {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.section-header-airports {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.section-header-info {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.section-header-volcanic {
+  background: #fee2e2;
+  color: #991b1b;
+}
 
     .row {
       margin-bottom: 8px;
@@ -595,12 +617,14 @@ input {
 
   </div>
 
-  <div class="right-panel">
-    <div class="title">Affected Airports</div>
-    <div id="airportRestrictionList">
-      날짜별 Advisory 조회 중...
-    </div>
+<div class="right-panel">
+  <div class="title">
+    <span class="section-header section-header-airports">Affected Airports</span>
   </div>
+  <div id="airportRestrictionList">
+    날짜별 Advisory 조회 중...
+  </div>
+</div>
 <div class="mobile-panel-buttons">
   <button id="mobileBtnMain" type="button" data-panel="main" onclick="showMobilePanel('main')">Info</button>
   <button id="mobileBtnAirports" type="button" data-panel="airports" onclick="showMobilePanel('airports')">Airports</button>
@@ -1398,9 +1422,9 @@ function renderDccInfoAdvisoryHtml() {
 
   return `
     <div style="margin-top:10px; padding-top:8px; border-top:2px solid #d1d5db;">
-      <div style="font-weight:800; margin-bottom:6px; color:#111827;">
-        DCC / Info Advisory
-      </div>
+    <div style="margin-bottom:6px;">
+  <span class="section-header section-header-info">DCC / Info Advisory</span>
+</div>
       ${dccInfoAdvisories.map(a => {
         return `
           <div class="airport-item"
@@ -1422,9 +1446,9 @@ function renderDccVolcanicAshAdvisoryHtml() {
 
   return `
     <div style="margin-top:10px; padding-top:8px; border-top:2px solid #d1d5db;">
-      <div style="font-weight:800; margin-bottom:6px; color:#111827;">
-        DCC / Volcanic Ash
-      </div>
+   <div style="margin-bottom:6px;">
+  <span class="section-header section-header-volcanic">DCC / Volcanic Ash</span>
+</div>
       ${dccVolcanicAshAdvisories.map(a => {
         return `
           <div class="airport-item"
