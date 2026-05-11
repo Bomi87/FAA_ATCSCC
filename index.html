@@ -622,7 +622,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbw_A09KPQyV7T7dzCRxLUrvwLxGqG9WidOvSK_eAV-9_8s5dkoUYGstdedAVgJIlgH5kQ/exec";
+  "https://script.google.com/macros/s/AKfycbzRyeQu1C7O2tPpGodj34XT4JUfPnuFLCBHwvH76R69wDrrG-YW4jVIuM-PUFIDWfOwHA/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -644,7 +644,13 @@ const map = L.map("map", {
   worldCopyJump: false
 }).setView([39.5, -98.5], window.innerWidth <= 767 ? 3 : 4);
 
-    
+ let volcanicAshLayerGroup = L.layerGroup().addTo(map);
+
+function clearVolcanicAshLayers() {
+  if (volcanicAshLayerGroup) {
+    volcanicAshLayerGroup.clearLayers();
+  }
+}   
 map.createPane("artccPane");
 map.getPane("artccPane").style.zIndex = 410;
 
@@ -757,6 +763,102 @@ let isAdvisoryDetailOpen = false;
   return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
 }
 
+
+
+   function showVolcanicAshOnMap(advisory) {
+  clearVolcanicAshLayers();
+
+  const ash = advisory && advisory.volcanicAsh;
+
+  if (!ash || !Array.isArray(ash.layers) || ash.layers.length === 0) {
+    return;
+  }
+
+  const boundsList = [];
+
+  ash.layers.forEach(layer => {
+    if (!layer || layer.noAshExpected) return;
+    if (!Array.isArray(layer.polygon) || layer.polygon.length < 3) return;
+
+    // 백엔드 polygon은 [lat, lon] 형태
+    const latLngs = layer.polygon
+      .map(p => {
+        if (!Array.isArray(p) || p.length < 2) return null;
+
+        const lat = Number(p[0]);
+        const lon = Number(p[1]);
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+        return [lat, lon];
+      })
+      .filter(Boolean);
+
+    if (latLngs.length < 3) return;
+
+    let color = "#ef4444";      // OBS: red
+    let fillOpacity = 0.18;
+
+    if (/6HR/i.test(layer.label || "")) {
+      color = "#f59e0b";        // +6HR: orange
+      fillOpacity = 0.14;
+    } else if (/12HR/i.test(layer.label || "")) {
+      color = "#eab308";        // +12HR: yellow
+      fillOpacity = 0.12;
+    } else if (/18HR/i.test(layer.label || "")) {
+      color = "#84cc16";        // +18HR: green
+      fillOpacity = 0.10;
+    }
+
+    const polygon = L.polygon(latLngs, {
+      color: color,
+      weight: 2,
+      opacity: 0.95,
+      fillColor: color,
+      fillOpacity: fillOpacity,
+      interactive: true
+    });
+
+const popupHtml = `
+  <div style="min-width:220px; font-size:12px; line-height:1.45;">
+    <div style="font-weight:700; margin-bottom:4px;">
+      ${escapeHtml(ash.volcano || "Volcanic Ash")}
+    </div>
+    <div><b>${escapeHtml(layer.label || "VA CLD")}</b></div>
+    <div>Altitude: ${escapeHtml(layer.altitude || "-")}</div>
+    <div>Area: ${escapeHtml(ash.area || "-")}</div>
+    <div>Source Elev: ${escapeHtml(ash.sourceElev || "-")}</div>
+    <div>Advisory: ${escapeHtml(advisory.advn || "-")}</div>
+  </div>
+`;
+
+   polygon.bindPopup(popupHtml);
+polygon.addTo(volcanicAshLayerGroup);
+
+if (polygon.bringToFront) {
+  polygon.bringToFront();
+}
+
+    const b = polygon.getBounds();
+    if (b && b.isValid()) {
+      boundsList.push(b);
+    }
+  });
+
+  if (boundsList.length > 0) {
+    let combinedBounds = boundsList[0];
+
+    for (let i = 1; i < boundsList.length; i++) {
+      combinedBounds.extend(boundsList[i]);
+    }
+
+    // 너무 가까이 zoom-in 되지 않게 maxZoom 제한
+    map.fitBounds(combinedBounds, {
+      padding: [70, 70],
+      maxZoom: 7
+    });
+  }
+} 
     /*******************************************************
      * Basic Utils
      *******************************************************/
@@ -1129,7 +1231,11 @@ return "<span class='advzy-chip'>" +
 
         return `
           <div class="advisory-item">
-            <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+        <a href="#"
+   style="font-weight:700; color:#111827; text-decoration:underline;"
+   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">
+  ADVZY ${escapeHtml(a.advn)}
+</a><br>
             ${highlightTerms(a.title || "", terms)}<br>
             ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
             ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
@@ -1172,7 +1278,11 @@ return "<span class='advzy-chip'>" +
 
     return `
       <div class="advisory-item">
-        <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+        <a href="#"
+   style="font-weight:700; color:#111827; text-decoration:underline;"
+   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">
+  ADVZY ${escapeHtml(a.advn)}
+</a><br>
         ${highlightTerms(a.title || "", terms)}<br>
         ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
         ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
@@ -1225,7 +1335,11 @@ return "<span class='advzy-chip'>" +
 
           return `
             <div class="advisory-item">
-              <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+              <a href="#"
+   style="font-weight:700; color:#111827; text-decoration:underline;"
+   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">
+  ADVZY ${escapeHtml(a.advn)}
+</a><br>
               ${highlightTerms(a.title || "", terms)}<br>
               ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
               ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
@@ -1254,6 +1368,11 @@ return "<span class='advzy-chip'>" +
         document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
         return;
       }
+   if (a.volcanicAsh) {
+  showVolcanicAshOnMap(a);
+} else {
+  clearVolcanicAshLayers();
+}
 
       const terms = [];
 
