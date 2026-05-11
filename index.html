@@ -1887,14 +1887,14 @@ if (detailUrl) {
   html += `<tr><td>FAA</td><td>
     <a
       href="${escapeHtml(detailUrl)}"
-      onclick="event.stopPropagation(); window.location.href=this.href; return false;"
+      ontouchend="event.preventDefault(); event.stopPropagation(); window.location.href=this.href; return false;"
+      onclick="event.preventDefault(); event.stopPropagation(); window.location.href=this.href; return false;"
       style="color:#0284c7; font-weight:600; text-decoration:underline;"
     >
       Open Detail
     </a>
   </td></tr>`;
 }
-
   html += `</table></div>`;
   html += `</div>`;
 
