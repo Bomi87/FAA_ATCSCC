@@ -1437,6 +1437,9 @@ function showDccInfoAdvisorySummary(advn) {
     return;
   }
 
+  if (a.volcanicAsh) {
+    zoomToVolcanicAdvisory(a);
+  }
 
   const terms = Array.from(new Set([
     "DCC",
