@@ -1170,12 +1170,12 @@ renderAirportRestrictionList();
       title.includes("NRP") ||
       raw.includes("VA ADVISORY");
 
-    if (isDcc || isInfoType || a.volcanicAsh) {
-      dccInfoAdvisories.push(a);
-    }
+if (isDcc || isInfoType || a.volcanicAsh) {
+  dccInfoAdvisories.push(a);
+}
   });
 
-  dccInfoAdvisories.sort((a, b) => Number(a.advn) - Number(b.advn));
+dccInfoAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
 }
     function updateArtccAdvisoryColors() {
       Object.keys(artccLayerIndex).forEach(code => {
@@ -1209,7 +1209,7 @@ function renderDccInfoAdvisoryHtml() {
         const hasAsh = a.volcanicAsh ? " 🌋" : "";
 
         return `
-          <div class="airport-item" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}')">
+        <div class="airport-item" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); if (window.innerWidth <= 767) showMobilePanel('main');">
             <b>ADVZY ${escapeHtml(a.advn)}${hasAsh}</b><br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
