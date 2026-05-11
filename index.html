@@ -622,7 +622,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyjp1rnrx8SY6J9dWNIlhlV8PSTttrWO6mvSp1EcxQiUcRWOqtFfJ7SfCOZ_5QnuGrU7Q/exec";
+  "https://script.google.com/macros/s/AKfycbzzoBtmFBoP8X7YWPlF4T4D-OKlzIWIsZe0nzGVxT4luebjc5M9HRpgToFRKhLz1-DWcQ/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -746,7 +746,8 @@ let allAdvisoriesCache = [];
 let artccLayerIndex = {};
 let facilityAdvisoryMap = {};
 let airportAdvisoryMap = {};
-  let dccInfoAdvisories = [];
+let dccInfoAdvisories = [];
+let dccVolcanicAshAdvisories = [];
 
 let advisoryCacheLoadedAt = 0;
 let advisoryCacheDate = "";
@@ -1323,8 +1324,9 @@ renderAllVolcanicAshLayers();
       });
     }
 
-    function buildDccInfoAdvisoryList() {
+  function buildDccInfoAdvisoryList() {
   dccInfoAdvisories = [];
+  dccVolcanicAshAdvisories = [];
 
   allAdvisoriesCache.forEach(a => {
     const control = String(a.controlElement || "").toUpperCase();
@@ -1336,27 +1338,41 @@ renderAllVolcanicAshLayers();
       control.indexOf("DCC") >= 0 ||
       (a.facilityCodes || []).includes("DCC");
 
-const isInfoType =
-  title.includes("VOLCANIC ACTIVITY BULLETIN") ||
-  title.includes("VOLCANIC") ||
-  title.includes("VA ADVISORY") ||
-  title.includes("OPERATIONS PLAN") ||
-  title.includes("TCA/HOTLINE") ||
-  title.includes("TTCA/HOTLINE") ||
-  title.includes("HOTLINE WEB PAGE") ||
-  title.includes("NRP") ||
-  raw.includes("VA ADVISORY") ||
-  raw.includes("VOLCANO:") ||
-  raw.includes("OBS VA CLD") ||
-  raw.includes("FCST VA CLD");
-    
-if (isDcc || isInfoType || a.volcanicAsh) {
-  dccInfoAdvisories.push(a);
-}
+    const isVolcanicAsh =
+      Boolean(a.volcanicAsh) ||
+      title.includes("VOLCANIC ACTIVITY BULLETIN") ||
+      title.includes("VOLCANIC") ||
+      title.includes("VOLCANIC ASH") ||
+      title.includes("VA ADVISORY") ||
+      raw.includes("VA ADVISORY") ||
+      raw.includes("VOLCANO:") ||
+      raw.includes("OBS VA CLD") ||
+      raw.includes("EST VA CLD") ||
+      raw.includes("FCST VA CLD");
+
+    const isInfoType =
+      title.includes("OPERATIONS PLAN") ||
+      title.includes("TCA/HOTLINE") ||
+      title.includes("TTCA/HOTLINE") ||
+      title.includes("HOTLINE WEB PAGE") ||
+      title.includes("NRP");
+
+    // 화산재는 무조건 3번째 카테고리로 분리
+    if (isVolcanicAsh) {
+      dccVolcanicAshAdvisories.push(a);
+      return;
+    }
+
+    // 기존 DCC / Info Advisory
+    if (isDcc || isInfoType) {
+      dccInfoAdvisories.push(a);
+    }
   });
 
-dccInfoAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
+  dccInfoAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
+  dccVolcanicAshAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
 }
+    
     function updateArtccAdvisoryColors() {
       Object.keys(artccLayerIndex).forEach(code => {
         const layer = artccLayerIndex[code];
@@ -1386,12 +1402,10 @@ function renderDccInfoAdvisoryHtml() {
         DCC / Info Advisory
       </div>
       ${dccInfoAdvisories.map(a => {
-        const hasAsh = a.volcanicAsh ? " 🌋" : "";
-
         return `
           <div class="airport-item"
                onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}'); return false;">
-            <b>ADVZY ${escapeHtml(a.advn)}${hasAsh}</b><br>
+            <b>ADVZY ${escapeHtml(a.advn)}</b><br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
           </div>
@@ -1400,17 +1414,42 @@ function renderDccInfoAdvisoryHtml() {
     </div>
   `;
 }
+
+function renderDccVolcanicAshAdvisoryHtml() {
+  if (!dccVolcanicAshAdvisories || !dccVolcanicAshAdvisories.length) {
+    return "";
+  }
+
+  return `
+    <div style="margin-top:10px; padding-top:8px; border-top:2px solid #d1d5db;">
+      <div style="font-weight:800; margin-bottom:6px; color:#111827;">
+        DCC / Volcanic Ash
+      </div>
+      ${dccVolcanicAshAdvisories.map(a => {
+        return `
+          <div class="airport-item"
+               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}'); return false;">
+            <b>ADVZY ${escapeHtml(a.advn)} 🌋</b><br>
+            <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
+            ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}    
     
  function renderAirportRestrictionList() {
   const box = document.getElementById("airportRestrictionList");
 
-  const airports = Object.keys(airportAdvisoryMap).sort();
-  const dccHtml = renderDccInfoAdvisoryHtml();
+const airports = Object.keys(airportAdvisoryMap).sort();
+const dccHtml = renderDccInfoAdvisoryHtml();
+const volcanicAshHtml = renderDccVolcanicAshAdvisoryHtml();
 
-  if (!airports.length && !dccHtml) {
-    box.innerHTML = "영향 공항 없음";
-    return;
-  }
+if (!airports.length && !dccHtml && !volcanicAshHtml) {
+  box.innerHTML = "영향 공항 없음";
+  return;
+}
 
   const airportHtml = airports.length
     ? airports.map(ap => {
@@ -1443,7 +1482,7 @@ function renderDccInfoAdvisoryHtml() {
       }).join("")
     : "<div style='color:#6b7280; margin-bottom:8px;'>영향 공항 없음</div>";
 
-  box.innerHTML = airportHtml + dccHtml;
+box.innerHTML = airportHtml + dccHtml + volcanicAshHtml;
 }
 
 function showDccInfoAdvisorySummary(advn, skipZoom) {
