@@ -804,6 +804,277 @@ function buildVolcanicLayerTimeline(advisory, ash) {
       };
     });
 
+  const timedLayers = layers
+    .filter(x => x.validDate)
+    .sort((a, b) => a.validDate.getTime() - b.validDate.getTime());
+
+  const firstForecastTime = timedLayers.length ? timedLayers[0].validDate : null;
+
+  return layers.map(item => {
+    const label = String(item.layer.label || "").toUpperCase();
+
+    // EST / OBS는 첫 forecast 시간 전까지만 표시
+    if (!item.validDate && (label.includes("EST") || label.includes("OBS"))) {
+      return {
+        layer: item.layer,
+        validDate: null,
+        visibleUntil: firstForecastTime
+      };
+    }
+
+    // FCST +6HR, +12HR, +18HR
+    if (item.validDate) {
+      let nextValidDate = null;
+
+      for (let i = 0; i < timedLayers.length; i++) {
+        if (timedLayers[i].layer === item.layer && timedLayers[i + 1]) {
+          nextValidDate = timedLayers[i + 1].validDate;
+          break;
+        }
+      }
+
+      return {
+        layer: item.layer,
+        validDate: item.validDate,
+        visibleUntil: nextValidDate || item.validDate
+      };
+    }
+
+    return {
+      layer: item.layer,
+      validDate: null,
+      visibleUntil: null
+    };
+  });
+}
+
+function shouldShowVolcanicLayerByTimeline(entry) {
+  const now = Date.now();
+
+  const layer = entry.layer || {};
+  const label = String(layer.label || "").toUpperCase();
+
+  // EST / OBS는 첫 forecast 전까지만 표시
+  if ((label.includes("EST") || label.includes("OBS")) && entry.visibleUntil) {
+    return now < entry.visibleUntil.getTime();
+  }
+
+  // Forecast layer:
+  // +6HR은 +12HR 전까지 표시
+  // +12HR은 +18HR 전까지 표시
+  // 마지막 forecast는 자기 validTime 전까지만 표시
+  if (entry.visibleUntil) {
+    return now < entry.visibleUntil.getTime();
+  }
+
+  return true;
+}
+
+function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
+  const latLngs = layer.polygon
+    .map(p => {
+      if (!Array.isArray(p) || p.length < 2) return null;
+
+      const lat = Number(p[0]);
+      const lon = Number(p[1]);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+      return [lat, lon];
+    })
+    .filter(Boolean);
+
+  if (latLngs.length < 3) return;
+
+  let color = "#ef4444";
+  let fillOpacity = 0.18;
+
+  if (/EST/i.test(layer.label || "")) {
+    color = "#ef4444";
+    fillOpacity = 0.18;
+  } else if (/OBS/i.test(layer.label || "")) {
+    color = "#ef4444";
+    fillOpacity = 0.18;
+  } else if (/6HR/i.test(layer.label || "")) {
+    color = "#f59e0b";
+    fillOpacity = 0.14;
+  } else if (/12HR/i.test(layer.label || "")) {
+    color = "#eab308";
+    fillOpacity = 0.12;
+  } else if (/18HR/i.test(layer.label || "")) {
+    color = "#84cc16";
+    fillOpacity = 0.10;
+  }
+
+  const polygon = L.polygon(latLngs, {
+    color: color,
+    weight: 2,
+    opacity: 0.95,
+    fillColor: color,
+    fillOpacity: fillOpacity,
+    interactive: true
+  });
+
+  const baseTimeLabel = ash.estVaDtg
+    ? "EST VA DTG"
+    : (ash.obsVaDtg ? "OBS VA DTG" : "Base VA DTG");
+
+  const baseTimeValue = ash.baseVaDtg || ash.estVaDtg || ash.obsVaDtg || "";
+
+  const layerTitle = layer.validTime
+    ? `${layer.label || "VA CLD"} (=${layer.validTime})`
+    : (layer.label || "VA CLD");
+
+  const popupHtml = `
+    <div style="min-width:230px; font-size:12px; line-height:1.45;">
+      <div style="font-weight:700; margin-bottom:4px;">
+        ${escapeHtml(ash.volcano || "Volcanic Ash")}
+      </div>
+
+      <div><b>${escapeHtml(layerTitle)}</b></div>
+
+      ${baseTimeValue ? `
+        <div>${escapeHtml(baseTimeLabel)}: ${escapeHtml(baseTimeValue)}</div>
+      ` : ""}
+
+      <div>Altitude: ${escapeHtml(layer.altitude || "-")}</div>
+      <div>Area: ${escapeHtml(ash.area || "-")}</div>
+      <div>Source Elev: ${escapeHtml(ash.sourceElev || "-")}</div>
+
+      ${ash.vaac ? `
+        <div>VAAC: ${escapeHtml(ash.vaac)}</div>
+      ` : ""}
+
+      ${ash.advisoryNr ? `
+        <div>VA Advisory NR: ${escapeHtml(ash.advisoryNr)}</div>
+      ` : ""}
+
+      <div>ATCSCC Advisory: ${escapeHtml(advisory.advn || "-")}</div>
+    </div>
+  `;
+
+  polygon.bindPopup(popupHtml);
+  polygon.addTo(volcanicAshLayerGroup);
+
+  if (polygon.bringToFront) {
+    polygon.bringToFront();
+  }
+
+  const b = polygon.getBounds();
+  if (b && b.isValid()) {
+    boundsList.push(b);
+  }
+}
+
+function renderAllVolcanicAshLayers() {
+  clearVolcanicAshLayers();
+
+  const boundsList = [];
+
+  (allAdvisoriesCache || []).forEach(advisory => {
+    const ash = advisory && advisory.volcanicAsh;
+
+    if (!ash || !Array.isArray(ash.layers) || ash.layers.length === 0) {
+      return;
+    }
+
+    const timelineLayers = buildVolcanicLayerTimeline(advisory, ash);
+
+    timelineLayers.forEach(entry => {
+      if (!shouldShowVolcanicLayerByTimeline(entry)) return;
+
+      addVolcanicAshPolygonToMap(advisory, ash, entry.layer, boundsList);
+    });
+  });
+
+  // 자동 표시만 하고, 지도 위치는 강제로 이동하지 않음.
+  // 필요하면 아래 주석 해제해서 전체 ash 영역으로 자동 이동 가능.
+  /*
+  if (boundsList.length > 0) {
+    let combinedBounds = boundsList[0];
+
+    for (let i = 1; i < boundsList.length; i++) {
+      combinedBounds.extend(boundsList[i]);
+    }
+
+    map.fitBounds(combinedBounds, {
+      padding: [70, 70],
+      maxZoom: 7
+    });
+  }
+  */
+}
+function zoomToVolcanicAdvisory(advisory) {
+  const ash = advisory && advisory.volcanicAsh;
+
+  if (!ash || !Array.isArray(ash.layers) || ash.layers.length === 0) {
+    return;
+  }
+
+  const boundsList = [];
+  const timelineLayers = buildVolcanicLayerTimeline(advisory, ash);
+
+  timelineLayers.forEach(entry => {
+    if (!shouldShowVolcanicLayerByTimeline(entry)) return;
+
+    const layer = entry.layer;
+
+    if (!layer || !Array.isArray(layer.polygon) || layer.polygon.length < 3) {
+      return;
+    }
+
+    const latLngs = layer.polygon
+      .map(p => {
+        if (!Array.isArray(p) || p.length < 2) return null;
+
+        const lat = Number(p[0]);
+        const lon = Number(p[1]);
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+        return [lat, lon];
+      })
+      .filter(Boolean);
+
+    if (latLngs.length < 3) return;
+
+    const bounds = L.latLngBounds(latLngs);
+
+    if (bounds && bounds.isValid()) {
+      boundsList.push(bounds);
+    }
+  });
+
+  if (!boundsList.length) {
+    return;
+  }
+
+  let combinedBounds = boundsList[0];
+
+  for (let i = 1; i < boundsList.length; i++) {
+    combinedBounds.extend(boundsList[i]);
+  }
+
+  map.fitBounds(combinedBounds, {
+    padding: [70, 70],
+    maxZoom: 7
+  });
+}
+    
+function buildVolcanicLayerTimeline(advisory, ash) {
+  const layers = (ash.layers || [])
+    .filter(layer => {
+      if (!layer || layer.noAshExpected) return false;
+      if (!Array.isArray(layer.polygon) || layer.polygon.length < 3) return false;
+      return true;
+    })
+    .map(layer => {
+      return {
+        layer: layer,
+        validDate: parseVolcanicLayerValidTimeUtc(advisory, layer.validTime)
+      };
+    });
+
   // validTime 있는 forecast layer만 시간순 정렬
   const timedLayers = layers
     .filter(x => x.validDate)
@@ -1250,6 +1521,7 @@ buildAirportAdvisoryMap();
 buildDccInfoAdvisoryList();
 updateArtccAdvisoryColors();
 renderAirportRestrictionList();
+renderAllVolcanicAshLayers();
 
     // 선택된 ARTCC가 있으면, 새로 받은 캐시 기준으로 다시 표시
     if (selectedIdent) {
@@ -1425,8 +1697,6 @@ function showDccInfoAdvisorySummary(advn) {
     return;
   }
 
-  // 요약 화면에서는 ash polygon도 일단 지움
-  clearVolcanicAshLayers();
 
   const terms = Array.from(new Set([
     "DCC",
@@ -1623,11 +1893,6 @@ function showDccInfoAdvisorySummary(advn) {
         document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
         return;
       }
-   if (a.volcanicAsh) {
-  showVolcanicAshOnMap(a);
-} else {
-  clearVolcanicAshLayers();
-}
 
       const terms = [];
 
