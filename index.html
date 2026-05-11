@@ -1624,7 +1624,9 @@ box.innerHTML = `
   const box = document.getElementById("advisoryBox");
   const code = String(ident || "").toUpperCase();
 
-  const matches = facilityAdvisoryMap[code] || [];
+ const matches = (facilityAdvisoryMap[code] || [])
+  .slice()
+  .sort((a, b) => Number(b.advn) - Number(a.advn));
 
   if (!matches.length) {
     box.innerHTML = escapeHtml(code) + " 관련 Advisory 없음";
@@ -1693,7 +1695,10 @@ box.innerHTML = `
           return;
         }
 
-        box.innerHTML = data.advisories.map(a => {
+      box.innerHTML = (data.advisories || [])
+  .slice()
+  .sort((a, b) => Number(b.advn) - Number(a.advn))
+  .map(a => {
           const terms = Array.from(new Set([
             ident,
             ...(a.controlFacilityCodes || []),
