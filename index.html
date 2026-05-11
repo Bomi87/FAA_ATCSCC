@@ -3288,6 +3288,82 @@ async function geocodeAirportByIcao(icao) {
   };
 }
 
+async function showNdbMarkerIfExistsByIcao(code, airport) {
+  const searchCode = String(code || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
+
+  if (!/^[A-Z]{4}$/.test(searchCode)) {
+    return false;
+  }
+
+  const button = document.getElementById("ndbToggleBtn");
+
+  if (!ndbLoaded) {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Loading";
+    }
+
+    await loadNdbAirports();
+    ndbLoaded = true;
+
+    if (button) {
+      button.disabled = false;
+    }
+  }
+
+  if (!map.hasLayer(ndbLayer)) {
+    map.addLayer(ndbLayer);
+  }
+
+  ndbVisible = true;
+
+  if (button) {
+    button.textContent = "NDB ON";
+    button.classList.add("active");
+  }
+
+  ndbLayer.clearLayers();
+
+  let matchedMarker = null;
+
+  ndbMarkers.forEach(marker => {
+    const name = String(marker._ndbName || "").toUpperCase();
+
+    if (name.includes(searchCode)) {
+      marker.addTo(ndbLayer);
+
+      if (!matchedMarker) {
+        matchedMarker = marker;
+      }
+    }
+  });
+
+  if (!matchedMarker) {
+    return false;
+  }
+
+  const address = airport && airport.name
+    ? String(airport.name)
+    : "";
+
+  matchedMarker.bindPopup(
+    buildPopupHtml(
+      searchCode,
+      address ? escapeHtml(address) : "",
+      []
+    ),
+    POPUP_OPTIONS
+  );
+
+  matchedMarker.openPopup();
+
+  return true;
+}
+    
 async function zoomToAirportByIcao(icao) {
   const code = String(icao || "").trim().toUpperCase();
 
@@ -3302,19 +3378,18 @@ async function zoomToAirportByIcao(icao) {
       alert(code + " 공항 위치를 찾을 수 없습니다.");
       return;
     }
-
 map.setView([airport.lat, airport.lon], 10);
 
-// NDB 리스트에 같은 ICAO가 있으면 해당 NDB 아이콘도 표시
-const hasNdbMarker = await showNdbMarkerIfExistsByIcao(code);
+// NDB 리스트에 같은 ICAO가 있으면 NDB 아이콘 표시 + 주소 popup
+const hasNdbMarker = await showNdbMarkerIfExistsByIcao(code, airport);
 
-// NDB marker가 없을 때만 일반 공항 popup 표시
+// NDB marker가 없을 때만 일반 popup 표시
 if (!hasNdbMarker) {
   L.popup()
     .setLatLng([airport.lat, airport.lon])
     .setContent(
       "<b>" + escapeHtml(code) + "</b><br>" +
-      escapeHtml((airport.name || code).split(",")[0])
+      escapeHtml(airport.name || code)
     )
     .openOn(map);
 }
