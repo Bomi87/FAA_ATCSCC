@@ -1162,14 +1162,20 @@ renderAirportRestrictionList();
       control.indexOf("DCC") >= 0 ||
       (a.facilityCodes || []).includes("DCC");
 
-    const isInfoType =
-      title.includes("VOLCANIC ACTIVITY BULLETIN") ||
-      title.includes("OPERATIONS PLAN") ||
-      title.includes("TCA/HOTLINE") ||
-      title.includes("HOTLINE WEB PAGE") ||
-      title.includes("NRP") ||
-      raw.includes("VA ADVISORY");
-
+const isInfoType =
+  title.includes("VOLCANIC ACTIVITY BULLETIN") ||
+  title.includes("VOLCANIC") ||
+  title.includes("VA ADVISORY") ||
+  title.includes("OPERATIONS PLAN") ||
+  title.includes("TCA/HOTLINE") ||
+  title.includes("TTCA/HOTLINE") ||
+  title.includes("HOTLINE WEB PAGE") ||
+  title.includes("NRP") ||
+  raw.includes("VA ADVISORY") ||
+  raw.includes("VOLCANO:") ||
+  raw.includes("OBS VA CLD") ||
+  raw.includes("FCST VA CLD");
+    
 if (isDcc || isInfoType || a.volcanicAsh) {
   dccInfoAdvisories.push(a);
 }
@@ -1209,7 +1215,8 @@ function renderDccInfoAdvisoryHtml() {
         const hasAsh = a.volcanicAsh ? " 🌋" : "";
 
         return `
-        <div class="airport-item" onclick="showAdvisoryDetail('${escapeHtml(a.advn)}'); if (window.innerWidth <= 767) showMobilePanel('main');">
+     <div class="airport-item"
+     onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); if (window.innerWidth <= 767) showMobilePanel('main'); return false;">
             <b>ADVZY ${escapeHtml(a.advn)}${hasAsh}</b><br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
