@@ -763,11 +763,9 @@ let isAdvisoryDetailOpen = false;
 
   return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
 }
-
 function parseVolcanicLayerValidTimeUtc(advisory, validTimeText) {
   const s = String(validTimeText || "").trim().toUpperCase();
 
-  // 예: 11/1030Z
   const m = s.match(/^(\d{2})\/(\d{4})Z$/);
   if (!m) return null;
 
@@ -784,7 +782,6 @@ function parseVolcanicLayerValidTimeUtc(advisory, validTimeText) {
   const month = Number(base[2]);
 
   const d = new Date(Date.UTC(year, month - 1, day, hour, min, 0));
-
   if (isNaN(d.getTime())) return null;
 
   return d;
@@ -797,12 +794,10 @@ function buildVolcanicLayerTimeline(advisory, ash) {
       if (!Array.isArray(layer.polygon) || layer.polygon.length < 3) return false;
       return true;
     })
-    .map(layer => {
-      return {
-        layer: layer,
-        validDate: parseVolcanicLayerValidTimeUtc(advisory, layer.validTime)
-      };
-    });
+    .map(layer => ({
+      layer,
+      validDate: parseVolcanicLayerValidTimeUtc(advisory, layer.validTime)
+    }));
 
   const timedLayers = layers
     .filter(x => x.validDate)
@@ -813,7 +808,6 @@ function buildVolcanicLayerTimeline(advisory, ash) {
   return layers.map(item => {
     const label = String(item.layer.label || "").toUpperCase();
 
-    // EST / OBS는 첫 forecast 시간 전까지만 표시
     if (!item.validDate && (label.includes("EST") || label.includes("OBS"))) {
       return {
         layer: item.layer,
@@ -822,7 +816,6 @@ function buildVolcanicLayerTimeline(advisory, ash) {
       };
     }
 
-    // FCST +6HR, +12HR, +18HR
     if (item.validDate) {
       let nextValidDate = null;
 
@@ -850,19 +843,13 @@ function buildVolcanicLayerTimeline(advisory, ash) {
 
 function shouldShowVolcanicLayerByTimeline(entry) {
   const now = Date.now();
-
   const layer = entry.layer || {};
   const label = String(layer.label || "").toUpperCase();
 
-  // EST / OBS는 첫 forecast 전까지만 표시
   if ((label.includes("EST") || label.includes("OBS")) && entry.visibleUntil) {
     return now < entry.visibleUntil.getTime();
   }
 
-  // Forecast layer:
-  // +6HR은 +12HR 전까지 표시
-  // +12HR은 +18HR 전까지 표시
-  // 마지막 forecast는 자기 validTime 전까지만 표시
   if (entry.visibleUntil) {
     return now < entry.visibleUntil.getTime();
   }
@@ -870,22 +857,7 @@ function shouldShowVolcanicLayerByTimeline(entry) {
   return true;
 }
 
-function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
-  const latLngs = layer.polygon
-    .map(p => {
-      if (!Array.isArray(p) || p.length < 2) return null;
-
-      const lat = Number(p[0]);
-      const lon = Number(p[1]);
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-      return [lat, lon];
-    })
-    .filter(Boolean);
-
-  if (latLngs.length < 3) return;
-
+function getVolcanicLayerStyle(layer) {
   let color = "#ef4444";
   let fillOpacity = 0.18;
 
@@ -906,15 +878,32 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
     fillOpacity = 0.10;
   }
 
-  const polygon = L.polygon(latLngs, {
-    color: color,
+  return {
+    color,
     weight: 2,
     opacity: 0.95,
     fillColor: color,
-    fillOpacity: fillOpacity,
+    fillOpacity,
     interactive: true
-  });
+  };
+}
 
+function makeVolcanicLayerLatLngs(layer) {
+  return (layer.polygon || [])
+    .map(p => {
+      if (!Array.isArray(p) || p.length < 2) return null;
+
+      const lat = Number(p[0]);
+      const lon = Number(p[1]);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+      return [lat, lon];
+    })
+    .filter(Boolean);
+}
+
+function buildVolcanicPopupHtml(advisory, ash, layer) {
   const baseTimeLabel = ash.estVaDtg
     ? "EST VA DTG"
     : (ash.obsVaDtg ? "OBS VA DTG" : "Base VA DTG");
@@ -925,7 +914,7 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
     ? `${layer.label || "VA CLD"} (=${layer.validTime})`
     : (layer.label || "VA CLD");
 
-  const popupHtml = `
+  return `
     <div style="min-width:230px; font-size:12px; line-height:1.45;">
       <div style="font-weight:700; margin-bottom:4px;">
         ${escapeHtml(ash.volcano || "Volcanic Ash")}
@@ -941,19 +930,21 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
       <div>Area: ${escapeHtml(ash.area || "-")}</div>
       <div>Source Elev: ${escapeHtml(ash.sourceElev || "-")}</div>
 
-      ${ash.vaac ? `
-        <div>VAAC: ${escapeHtml(ash.vaac)}</div>
-      ` : ""}
-
-      ${ash.advisoryNr ? `
-        <div>VA Advisory NR: ${escapeHtml(ash.advisoryNr)}</div>
-      ` : ""}
+      ${ash.vaac ? `<div>VAAC: ${escapeHtml(ash.vaac)}</div>` : ""}
+      ${ash.advisoryNr ? `<div>VA Advisory NR: ${escapeHtml(ash.advisoryNr)}</div>` : ""}
 
       <div>ATCSCC Advisory: ${escapeHtml(advisory.advn || "-")}</div>
     </div>
   `;
+}
 
-  polygon.bindPopup(popupHtml);
+function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
+  const latLngs = makeVolcanicLayerLatLngs(layer);
+  if (latLngs.length < 3) return;
+
+  const polygon = L.polygon(latLngs, getVolcanicLayerStyle(layer));
+
+  polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
   polygon.addTo(volcanicAshLayerGroup);
 
   if (polygon.bringToFront) {
@@ -961,7 +952,7 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
   }
 
   const b = polygon.getBounds();
-  if (b && b.isValid()) {
+  if (b && b.isValid() && Array.isArray(boundsList)) {
     boundsList.push(b);
   }
 }
@@ -982,28 +973,11 @@ function renderAllVolcanicAshLayers() {
 
     timelineLayers.forEach(entry => {
       if (!shouldShowVolcanicLayerByTimeline(entry)) return;
-
       addVolcanicAshPolygonToMap(advisory, ash, entry.layer, boundsList);
     });
   });
-
-  // 자동 표시만 하고, 지도 위치는 강제로 이동하지 않음.
-  // 필요하면 아래 주석 해제해서 전체 ash 영역으로 자동 이동 가능.
-  /*
-  if (boundsList.length > 0) {
-    let combinedBounds = boundsList[0];
-
-    for (let i = 1; i < boundsList.length; i++) {
-      combinedBounds.extend(boundsList[i]);
-    }
-
-    map.fitBounds(combinedBounds, {
-      padding: [70, 70],
-      maxZoom: 7
-    });
-  }
-  */
 }
+
 function zoomToVolcanicAdvisory(advisory) {
   const ash = advisory && advisory.volcanicAsh;
 
@@ -1017,37 +991,16 @@ function zoomToVolcanicAdvisory(advisory) {
   timelineLayers.forEach(entry => {
     if (!shouldShowVolcanicLayerByTimeline(entry)) return;
 
-    const layer = entry.layer;
-
-    if (!layer || !Array.isArray(layer.polygon) || layer.polygon.length < 3) {
-      return;
-    }
-
-    const latLngs = layer.polygon
-      .map(p => {
-        if (!Array.isArray(p) || p.length < 2) return null;
-
-        const lat = Number(p[0]);
-        const lon = Number(p[1]);
-
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-        return [lat, lon];
-      })
-      .filter(Boolean);
-
+    const latLngs = makeVolcanicLayerLatLngs(entry.layer);
     if (latLngs.length < 3) return;
 
     const bounds = L.latLngBounds(latLngs);
-
     if (bounds && bounds.isValid()) {
       boundsList.push(bounds);
     }
   });
 
-  if (!boundsList.length) {
-    return;
-  }
+  if (!boundsList.length) return;
 
   let combinedBounds = boundsList[0];
 
@@ -1060,220 +1013,7 @@ function zoomToVolcanicAdvisory(advisory) {
     maxZoom: 7
   });
 }
-    
-function buildVolcanicLayerTimeline(advisory, ash) {
-  const layers = (ash.layers || [])
-    .filter(layer => {
-      if (!layer || layer.noAshExpected) return false;
-      if (!Array.isArray(layer.polygon) || layer.polygon.length < 3) return false;
-      return true;
-    })
-    .map(layer => {
-      return {
-        layer: layer,
-        validDate: parseVolcanicLayerValidTimeUtc(advisory, layer.validTime)
-      };
-    });
 
-  // validTime 있는 forecast layer만 시간순 정렬
-  const timedLayers = layers
-    .filter(x => x.validDate)
-    .sort((a, b) => a.validDate.getTime() - b.validDate.getTime());
-
-  const firstForecastTime = timedLayers.length ? timedLayers[0].validDate : null;
-
-  return layers.map(item => {
-    const label = String(item.layer.label || "").toUpperCase();
-
-    // EST/OBS는 첫 forecast 시간 전까지만 표시
-    if (!item.validDate && (label.includes("EST") || label.includes("OBS"))) {
-      return {
-        layer: item.layer,
-        visibleUntil: firstForecastTime
-      };
-    }
-
-    // +6HR, +12HR 등은 다음 forecast 시간 전까지 표시
-    if (item.validDate) {
-      let nextValidDate = null;
-
-      for (let i = 0; i < timedLayers.length; i++) {
-        if (timedLayers[i].layer === item.layer && timedLayers[i + 1]) {
-          nextValidDate = timedLayers[i + 1].validDate;
-          break;
-        }
-      }
-
-      return {
-        layer: item.layer,
-        validDate: item.validDate,
-        visibleUntil: nextValidDate || item.validDate
-      };
-    }
-
-    // 시간 없는 기타 layer는 안전하게 표시
-    return {
-      layer: item.layer,
-      visibleUntil: null
-    };
-  });
-}
-
-function shouldShowVolcanicLayerByTimeline(entry) {
-  const now = Date.now();
-
-  const layer = entry.layer || {};
-  const label = String(layer.label || "").toUpperCase();
-
-  // EST/OBS는 첫 forecast 시간 전까지만 표시
-  if ((label.includes("EST") || label.includes("OBS")) && entry.visibleUntil) {
-    return now < entry.visibleUntil.getTime();
-  }
-
-  // forecast layer
-  // 다음 forecast 시간이 있으면 그 전까지 표시
-  // 마지막 forecast는 자기 validTime 전까지만 표시
-  if (entry.visibleUntil) {
-    return now < entry.visibleUntil.getTime();
-  }
-
-  return true;
-}
-
- function showVolcanicAshOnMap(advisory) {
-  clearVolcanicAshLayers();
-
-  const ash = advisory && advisory.volcanicAsh;
-
-  if (!ash || !Array.isArray(ash.layers) || ash.layers.length === 0) {
-    return;
-  }
-
-  const boundsList = [];
-
- const timelineLayers = buildVolcanicLayerTimeline(advisory, ash);
-
-timelineLayers.forEach(entry => {
-  if (!shouldShowVolcanicLayerByTimeline(entry)) return;
-
-  const layer = entry.layer;
-
-    // 백엔드 polygon은 [lat, lon] 형태
-    const latLngs = layer.polygon
-      .map(p => {
-        if (!Array.isArray(p) || p.length < 2) return null;
-
-        const lat = Number(p[0]);
-        const lon = Number(p[1]);
-
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-        return [lat, lon];
-      })
-      .filter(Boolean);
-
-    if (latLngs.length < 3) return;
-
-    // OBS / EST = 현재 또는 추정 ash 영역
-    let color = "#ef4444";
-    let fillOpacity = 0.18;
-
-    if (/EST/i.test(layer.label || "")) {
-      color = "#ef4444";
-      fillOpacity = 0.18;
-    } else if (/OBS/i.test(layer.label || "")) {
-      color = "#ef4444";
-      fillOpacity = 0.18;
-    } else if (/6HR/i.test(layer.label || "")) {
-      color = "#f59e0b";
-      fillOpacity = 0.14;
-    } else if (/12HR/i.test(layer.label || "")) {
-      color = "#eab308";
-      fillOpacity = 0.12;
-    } else if (/18HR/i.test(layer.label || "")) {
-      color = "#84cc16";
-      fillOpacity = 0.10;
-    }
-
-    const polygon = L.polygon(latLngs, {
-      color: color,
-      weight: 2,
-      opacity: 0.95,
-      fillColor: color,
-      fillOpacity: fillOpacity,
-      interactive: true
-    });
-
-  
-
-const baseTimeLabel = ash.estVaDtg
-  ? "EST VA DTG"
-  : (ash.obsVaDtg ? "OBS VA DTG" : "Base VA DTG");
-
-const baseTimeValue = ash.baseVaDtg || ash.estVaDtg || ash.obsVaDtg || "";
-
-const layerTitle = layer.validTime
-  ? `${layer.label || "VA CLD"} (=${layer.validTime})`
-  : (layer.label || "VA CLD");
-
-const layerTitle = layer.validTime
-  ? `${layer.label || "VA CLD"} (=${layer.validTime})`
-  : (layer.label || "VA CLD");
-
-const popupHtml = `
-  <div style="min-width:230px; font-size:12px; line-height:1.45;">
-    <div style="font-weight:700; margin-bottom:4px;">
-      ${escapeHtml(ash.volcano || "Volcanic Ash")}
-    </div>
-
-    <div><b>${escapeHtml(layerTitle)}</b></div>
-
-    ${baseTimeValue ? `
-      <div>${escapeHtml(baseTimeLabel)}: ${escapeHtml(baseTimeValue)}</div>
-    ` : ""}
-
-    <div>Altitude: ${escapeHtml(layer.altitude || "-")}</div>
-    <div>Area: ${escapeHtml(ash.area || "-")}</div>
-    <div>Source Elev: ${escapeHtml(ash.sourceElev || "-")}</div>
-
-    ${ash.vaac ? `
-      <div>VAAC: ${escapeHtml(ash.vaac)}</div>
-    ` : ""}
-
-    ${ash.advisoryNr ? `
-      <div>VA Advisory NR: ${escapeHtml(ash.advisoryNr)}</div>
-    ` : ""}
-
-    <div>ATCSCC Advisory: ${escapeHtml(advisory.advn || "-")}</div>
-  </div>
-`;
-    polygon.bindPopup(popupHtml);
-    polygon.addTo(volcanicAshLayerGroup);
-
-    if (polygon.bringToFront) {
-      polygon.bringToFront();
-    }
-
-    const b = polygon.getBounds();
-    if (b && b.isValid()) {
-      boundsList.push(b);
-    }
-  });
-
-  if (boundsList.length > 0) {
-    let combinedBounds = boundsList[0];
-
-    for (let i = 1; i < boundsList.length; i++) {
-      combinedBounds.extend(boundsList[i]);
-    }
-
-    // ash 영역으로 이동하되 너무 가까이 확대되지 않게 제한
-    map.fitBounds(combinedBounds, {
-      padding: [70, 70],
-      maxZoom: 7
-    });
-  }
-}
     /*******************************************************
      * Basic Utils
      *******************************************************/
@@ -1888,13 +1628,17 @@ function showDccInfoAdvisorySummary(advn) {
   previousAdvisoryBoxHtml = box.innerHTML;
   isAdvisoryDetailOpen = true;
 
-  const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
-      if (!a) {
-        document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
-        return;
-      }
+const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
+if (!a) {
+  document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
+  return;
+}
 
-      const terms = [];
+if (a.volcanicAsh) {
+  zoomToVolcanicAdvisory(a);
+}
+
+const terms = [];
 
       if (selectedIdent) terms.push(selectedIdent);
       (a.controlFacilityCodes || []).forEach(x => terms.push(x));
