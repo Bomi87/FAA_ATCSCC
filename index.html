@@ -944,8 +944,27 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
 
   const polygon = L.polygon(latLngs, getVolcanicLayerStyle(layer));
 
-  polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
-  polygon.addTo(volcanicAshLayerGroup);
+polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
+
+polygon.on("click", function (e) {
+  if (e && e.originalEvent) {
+    L.DomEvent.stopPropagation(e);
+  }
+
+  // 도형 popup도 열고
+  polygon.openPopup(e.latlng);
+
+
+// 도형 클릭 시: 왼쪽 Info 창에 해당 Advisory 요약 표시, zoom은 유지
+showDccInfoAdvisorySummary(advisory.advn, true);
+
+  // 모바일이면 Info 패널 열기
+  if (window.innerWidth <= 767) {
+    showMobilePanel("main");
+  }
+});
+
+polygon.addTo(volcanicAshLayerGroup);
 
   if (polygon.bringToFront) {
     polygon.bringToFront();
@@ -1427,7 +1446,7 @@ function renderDccInfoAdvisoryHtml() {
   box.innerHTML = airportHtml + dccHtml;
 }
 
-function showDccInfoAdvisorySummary(advn) {
+function showDccInfoAdvisorySummary(advn, skipZoom) {
   const box = document.getElementById("advisoryBox");
 
   const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
@@ -1437,7 +1456,7 @@ function showDccInfoAdvisorySummary(advn) {
     return;
   }
 
-  if (a.volcanicAsh) {
+  if (a.volcanicAsh && !skipZoom) {
     zoomToVolcanicAdvisory(a);
   }
 
