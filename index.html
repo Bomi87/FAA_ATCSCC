@@ -622,7 +622,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzg1MXqMm6zaI1zSHQRhQoVrpoxwpJsGDLavZyaOJkuWRIQHJRrEwuYhj3w61aNURtWUA/exec";
+  "https://script.google.com/macros/s/AKfycbxDTFQDwbD1yVry66mpxwX2f8neaPsTkQ_-HKkm8ij3bA0xbk-8gkWcZzkFuVWUSzz5qQ/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -1335,7 +1335,15 @@ if (p.eventType) {
   html += `<tr><td>Event</td><td>${escapeHtml(p.eventType)}</td></tr>`;
 }
 
-html += `<tr><td>Basis</td><td><a href="https://tfr.faa.gov/tfr3/?page=detail_0_0367" target="_blank">FDC 0/0367</a></td></tr>`;
+html += `<tr><td>Basis</td><td>
+  <a
+    href="https://tfr.faa.gov/tfr3/?page=detail_0_0367"
+    onclick="event.stopPropagation(); window.location.href=this.href; return false;"
+    style="color:#0284c7; font-weight:600; text-decoration:underline;"
+  >
+    FDC 0/0367
+  </a>
+</td></tr>`;
 
 if (p.teams) {
   html += `<tr><td>Teams</td><td>${escapeHtml(p.teams)}</td></tr>`;
@@ -1875,9 +1883,17 @@ if (artcc) {
     html += `<tr><td>Type</td><td>${escapeHtml(type)}</td></tr>`;
   }
 
-  if (detailUrl) {
-    html += `<tr><td>FAA</td><td><a href="${escapeHtml(detailUrl)}" target="_blank">Open Detail</a></td></tr>`;
-  }
+if (detailUrl) {
+  html += `<tr><td>FAA</td><td>
+    <a
+      href="${escapeHtml(detailUrl)}"
+      onclick="event.stopPropagation(); window.location.href=this.href; return false;"
+      style="color:#0284c7; font-weight:600; text-decoration:underline;"
+    >
+      Open Detail
+    </a>
+  </td></tr>`;
+}
 
   html += `</table></div>`;
   html += `</div>`;
