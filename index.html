@@ -75,6 +75,40 @@ html, body {
   margin-bottom: 6px;
 }
 
+    .title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.title-row .title {
+  margin-bottom: 0;
+}
+
+.title-refresh-btn {
+  border: none;
+  border-radius: 7px;
+  padding: 4px 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.title-refresh-btn:hover {
+  background: #1d4ed8;
+}
+
+.title-refresh-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+    
+
 .section-header-airports {
   background: #dbeafe;
   color: #1e3a8a;
@@ -475,6 +509,11 @@ html, body {
   opacity: 0.78;
 }
 
+  .title-refresh-btn {
+  padding: 3px 6px;
+  font-size: 9px;
+}
+
 .top-panel,
 .right-panel {
   display: none;
@@ -592,9 +631,14 @@ input {
 </head>
 
 <body>
-  <div class="top-panel">
+ <div class="top-panel">
+  <div class="title-row">
     <div class="title">FAA ARTCC Advisory Map</div>
-
+    <button id="advisoryRefreshBtn" class="title-refresh-btn" type="button" onclick="refreshAdvisoryData()">
+      Refresh
+    </button>
+  </div>
+   
     <div class="row">
       <label for="dateInput">Advisory Date</label>
    <input id="dateInput" type="date" />
@@ -1422,6 +1466,56 @@ renderAllVolcanicAshLayers();
   }
 }
 
+async function refreshAdvisoryData() {
+  const btn = document.getElementById("advisoryRefreshBtn");
+  const advisoryBox = document.getElementById("advisoryBox");
+  const airportBox = document.getElementById("airportRestrictionList");
+
+  if (isAllAdvisoryLoading) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Loading...";
+  }
+
+  try {
+    advisoryCacheLoadedAt = 0;
+    advisoryCacheDate = "";
+    allAdvisoriesCache = [];
+
+    if (advisoryBox) {
+      advisoryBox.innerHTML = "FAA Advisory 새로고침 중...";
+    }
+
+    if (airportBox) {
+      airportBox.innerHTML = "Advisory 전체 새로고침 중...";
+    }
+
+    updateFaaLink();
+    await loadAllAdvisoriesForDate();
+
+    if (selectedIdent) {
+      renderAdvisoriesForFacilityFromCache(selectedIdent);
+    } else if (advisoryBox) {
+      advisoryBox.innerHTML = "ARTCC를 클릭하면 FAA Advisory 조회.";
+    }
+
+  } catch (err) {
+    console.error(err);
+
+    if (advisoryBox) {
+      advisoryBox.innerHTML = "Refresh 실패: " + escapeHtml(err.message);
+    }
+
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Refresh";
+    }
+  }
+}
+
+    
     function buildFacilityAdvisoryMap() {
       facilityAdvisoryMap = {};
 
