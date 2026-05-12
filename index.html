@@ -1191,6 +1191,23 @@ function zoomToVolcanicAdvisory(advisory) {
       return result;
     }
 
+    function toNdbLatLngForCurrentMap(lat, lon) {
+  const safeLat = Number(lat);
+  const safeLon = Number(lon);
+
+  if (!Number.isFinite(safeLat) || !Number.isFinite(safeLon)) {
+    return null;
+  }
+
+  // 현재 지도 중심 경도 기준으로 가장 가까운 longitude copy 선택
+  const centerLon = map && map.getCenter
+    ? map.getCenter().lng
+    : safeLon;
+
+  const adjustedLon = shiftLonNearReference(safeLon, centerLon);
+
+  return [safeLat, adjustedLon];
+}
     function toRenderLatLng(lat, lon) {
       return [lat, shiftLonNearReference(lon, ROUTE_REFERENCE_LON)];
     }
@@ -3149,7 +3166,10 @@ function filterNdbAirports(searchCode) {
   });
 }
 function drawNdbAirportPoint(feature) {
-  const latlng = toRenderLatLng(feature.coords.lat, feature.coords.lon);
+  const latlng = toNdbLatLngForCurrentMap(feature.coords.lat, feature.coords.lon);
+
+  if (!latlng) return null;
+
   const name = feature.name || "NDB Airport";
 
   const marker = L.circleMarker(latlng, {
@@ -3157,10 +3177,15 @@ function drawNdbAirportPoint(feature) {
     color: "#111827",
     weight: 1,
     fillColor: "#06b6d4",
-    fillOpacity: 0.95
+    fillOpacity: 0.95,
+    pane: "ndbPane"
   });
 
   marker._ndbName = name;
+
+  // 중요: 검색할 때 현재 지도 중심 기준으로 다시 경도 보정하기 위한 원본 좌표 저장
+  marker._originalLat = Number(feature.coords.lat);
+  marker._originalLon = Number(feature.coords.lon);
 
   marker.bindPopup(
     buildPopupHtml(
@@ -3168,7 +3193,10 @@ function drawNdbAirportPoint(feature) {
       feature.description || "",
       feature.extraRows || []
     ),
-    POPUP_OPTIONS
+    {
+      ...POPUP_OPTIONS,
+      autoPan: false
+    }
   );
 
   marker.bindTooltip(escapeHtml(name), {
@@ -3445,6 +3473,21 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
     const name = String(marker._ndbName || "").toUpperCase();
 
     if (name.includes(searchCode)) {
+      // 검색 시점의 현재 지도 중심 기준으로 NDB marker 경도 재보정
+      const originalLat = Number(
+        marker._originalLat !== undefined ? marker._originalLat : marker.getLatLng().lat
+      );
+
+      const originalLon = Number(
+        marker._originalLon !== undefined ? marker._originalLon : marker.getLatLng().lng
+      );
+
+      const fixedLatLng = toNdbLatLngForCurrentMap(originalLat, originalLon);
+
+      if (fixedLatLng) {
+        marker.setLatLng(fixedLatLng);
+      }
+
       marker.addTo(ndbLayer);
 
       if (!matchedMarker) {
@@ -3467,7 +3510,10 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
       address ? escapeHtml(address) : "",
       []
     ),
-    POPUP_OPTIONS
+    {
+      ...POPUP_OPTIONS,
+      autoPan: false
+    }
   );
 
   matchedMarker.openPopup();
