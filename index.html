@@ -631,7 +631,23 @@ input {
 </head>
 
 <body>
- <div class="top-panel">
+  <div id="authScreen" style="
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    background:#f4f7fb;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',Arial,sans-serif;
+    color:#111827;
+    font-size:15px;
+    font-weight:700;
+  ">
+    승인 확인 중...
+  </div>
+
+  <div id="appRoot" style="display:none;">
+    <div class="top-panel">
   <div class="title-row">
     <div class="title">FAA ARTCC Advisory Map</div>
     <button id="advisoryRefreshBtn" class="title-refresh-btn" type="button" onclick="refreshAdvisoryData()">
@@ -3958,32 +3974,75 @@ window.addEventListener("resize", fixMobileViewportAfterKeyboard);
 window.addEventListener("orientationchange", function () {
   setTimeout(fixMobileViewportAfterKeyboard, 500);
 });
-    /*******************************************************
-     * Init
-     *******************************************************/
-document.getElementById("dateInput").addEventListener("change", function () {
-  updateFaaLink();
-  loadAllAdvisoriesForDate();
-});
+ /*******************************************************
+ * Init after Portal Auth
+ *******************************************************/
+let ARTCC_APP_STARTED = false;
 
-setDefaultAdvisoryDate();
-updateFaaLink();
-initNdbFixedControl();
+function startArtccAppAfterAuth() {
+  if (ARTCC_APP_STARTED) return;
+  ARTCC_APP_STARTED = true;
 
-loadArtccGeojson()
-  .then(() => {
+  const authScreen = document.getElementById("authScreen");
+  const appRoot = document.getElementById("appRoot");
+
+  if (authScreen) authScreen.style.display = "none";
+  if (appRoot) appRoot.style.display = "block";
+
+  document.getElementById("dateInput").addEventListener("change", function () {
+    updateFaaLink();
     loadAllAdvisoriesForDate();
-    autoLoadRouteFromUrl();
-    if (window.innerWidth <= 767) {
-  showMobilePanel("airports");
+  });
+
+  setDefaultAdvisoryDate();
+  updateFaaLink();
+  initNdbFixedControl();
+
+  setTimeout(function () {
+    if (map && map.invalidateSize) {
+      map.invalidateSize(true);
+    }
+  }, 100);
+
+  loadArtccGeojson()
+    .then(() => {
+      if (map && map.invalidateSize) {
+        map.invalidateSize(true);
+      }
+
+      loadAllAdvisoriesForDate();
+      autoLoadRouteFromUrl();
+
+      if (window.innerWidth <= 767) {
+        showMobilePanel("airports");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("ARTCC GeoJSON 로드 실패: " + err.message);
+    });
 }
-  })
-      .catch(err => {
-        console.error(err);
-        alert("ARTCC GeoJSON 로드 실패: " + err.message);
-      });
+
+(function waitForPortalAuth() {
+  if (sessionStorage.getItem("portalApproved") === "true") {
+    startArtccAppAfterAuth();
+    return;
+  }
+
+  if (window.CURRENT_PORTAL_USER) {
+    sessionStorage.setItem("portalApproved", "true");
+    startArtccAppAfterAuth();
+    return;
+  }
+
+  setTimeout(waitForPortalAuth, 200);
+})();
 
 
   </script>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://bomi87.github.io/SK-Aviation-portal/common-auth.js"></script>
 </body>
 </html>
