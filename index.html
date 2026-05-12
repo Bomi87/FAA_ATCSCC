@@ -400,6 +400,7 @@ html, body {
   color: #111827;
   font-size: 10px;
   font-weight: 700;
+  pointer-events: none !important;
   text-shadow:
     -1px -1px 0 #ffffff,
      1px -1px 0 #ffffff,
@@ -407,6 +408,20 @@ html, body {
      1px  1px 0 #ffffff,
      0 0 3px rgba(255,255,255,0.9);
 }
+
+.leaflet-ndb-pane {
+  pointer-events: none !important;
+}
+
+.leaflet-ndb-pane svg {
+  pointer-events: none !important;
+}
+
+.leaflet-ndb-pane path {
+  pointer-events: none !important;
+}
+
+    
     .ndb-label::before {
   display: none !important;
 }
@@ -678,6 +693,9 @@ function clearVolcanicAshLayers() {
 map.createPane("artccPane");
 map.getPane("artccPane").style.zIndex = 410;
 
+map.createPane("ndbPane");
+map.getPane("ndbPane").style.zIndex = 420;
+
 map.createPane("tfrPane");
 map.getPane("tfrPane").style.zIndex = 430;
 
@@ -686,9 +704,6 @@ map.getPane("baseballTfrPane").style.zIndex = 435;
 
 map.createPane("routePane");
 map.getPane("routePane").style.zIndex = 450;
-
-map.createPane("ndbPane");
-map.getPane("ndbPane").style.zIndex = 460;
     const artccRenderer = L.svg({ pane: "artccPane" });
 const tfrRenderer = L.svg({ pane: "tfrPane" });
 const baseballTfrRenderer = L.svg({ pane: "baseballTfrPane" });
@@ -2715,9 +2730,7 @@ async function toggleTfrLayer() {
       routeLayer.bringToFront();
     }
 
-    if (map.hasLayer(ndbLayer)) {
-      ndbLayer.bringToFront();
-    }
+  
 
     tfrVisible = true;
 
@@ -2770,9 +2783,7 @@ async function toggleTfrLayer() {
     routeLayer.bringToFront();
   }
 
-  if (map.hasLayer(ndbLayer)) {
-    ndbLayer.bringToFront();
-  }
+
 }  
 
 if (isAdvisoryCacheValid()) {
@@ -3314,14 +3325,15 @@ function drawNdbAirportPoint(feature) {
 
   const name = feature.name || "NDB Airport";
 
-  const marker = L.circleMarker(latlng, {
-    radius: 4,
-    color: "#111827",
-    weight: 1,
-    fillColor: "#06b6d4",
-    fillOpacity: 0.95,
-    pane: "ndbPane"
-  });
+const marker = L.circleMarker(latlng, {
+  radius: 4,
+  color: "#111827",
+  weight: 1,
+  fillColor: "#06b6d4",
+  fillOpacity: 0.95,
+  pane: "ndbPane",
+  interactive: false
+});
 
   marker._ndbName = name;
 
@@ -3341,13 +3353,14 @@ function drawNdbAirportPoint(feature) {
     }
   );
 
-  marker.bindTooltip(escapeHtml(name), {
-    permanent: true,
-    direction: "right",
-    offset: [-4, 0],
-    className: "ndb-label",
-    opacity: 1
-  });
+marker.bindTooltip(escapeHtml(name), {
+  permanent: true,
+  direction: "right",
+  offset: [-4, 0],
+  className: "ndb-label",
+  opacity: 1,
+  interactive: false
+});
 
   marker.addTo(ndbLayer);
   return marker;
