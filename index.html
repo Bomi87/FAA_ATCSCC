@@ -3163,28 +3163,28 @@ async function loadNdbAirports() {
   ndbLayer.clearLayers();
   ndbMarkers = [];
 
-features.forEach(f => {
-  const marker = drawNdbAirportPoint(f);
+  features.forEach(f => {
+    const marker = drawNdbAirportPoint(f);
 
-  if (marker) {
-    ndbMarkers.push(marker);
-  }
-});
-  }
+    if (marker) {
+      ndbMarkers.push(marker);
+    }
+  });
+}
 function filterNdbAirports(searchCode) {
   const code = String(searchCode || "").trim().toUpperCase();
 
   ndbLayer.clearLayers();
 
-ndbMarkers.forEach(marker => {
-  if (!marker) return;
+  ndbMarkers.forEach(marker => {
+    if (!marker) return;
 
-  const name = String(marker._ndbName || "").toUpperCase();
+    const name = String(marker._ndbName || "").toUpperCase();
 
-  if (!code || name.includes(code)) {
-    marker.addTo(ndbLayer);
-  }
-});
+    if (!code || name.includes(code)) {
+      marker.addTo(ndbLayer);
+    }
+  });
 }
 function drawNdbAirportPoint(feature) {
   const latlng = toNdbLatLngForCurrentMap(feature.coords.lat, feature.coords.lon);
