@@ -3163,23 +3163,27 @@ async function loadNdbAirports() {
   ndbLayer.clearLayers();
   ndbMarkers = [];
 
-  features.forEach(f => {
-    const marker = drawNdbAirportPoint(f);
+features.forEach(f => {
+  const marker = drawNdbAirportPoint(f);
+
+  if (marker) {
     ndbMarkers.push(marker);
-  });
-}
+  }
+});
 function filterNdbAirports(searchCode) {
   const code = String(searchCode || "").trim().toUpperCase();
 
   ndbLayer.clearLayers();
 
-  ndbMarkers.forEach(marker => {
-    const name = String(marker._ndbName || "").toUpperCase();
+ndbMarkers.forEach(marker => {
+  if (!marker) return;
 
-    if (!code || name.includes(code)) {
-      marker.addTo(ndbLayer);
-    }
-  });
+  const name = String(marker._ndbName || "").toUpperCase();
+
+  if (!code || name.includes(code)) {
+    marker.addTo(ndbLayer);
+  }
+});
 }
 function drawNdbAirportPoint(feature) {
   const latlng = toNdbLatLngForCurrentMap(feature.coords.lat, feature.coords.lon);
@@ -3442,7 +3446,6 @@ async function geocodeAirportByIcao(icao) {
     name: item.display_name || code
   };
 }
-
 async function showNdbMarkerIfExistsByIcao(code, airport) {
   const searchCode = String(code || "")
     .trim()
@@ -3484,51 +3487,34 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
   ndbLayer.clearLayers();
 
   let matchedMarker = null;
-  let targetLatLng = null;
-
-  const airportLat = airport && Number.isFinite(Number(airport.lat))
-    ? Number(airport.lat)
-    : null;
-
-  const airportLon = airport && Number.isFinite(Number(airport.lon))
-    ? Number(airport.lon)
-    : null;
 
   ndbMarkers.forEach(marker => {
+    if (!marker) return;
+
     const name = String(marker._ndbName || "").toUpperCase();
 
-    if (name.includes(searchCode)) {
-      const originalLat = Number(
-        marker._originalLat !== undefined ? marker._originalLat : marker.getLatLng().lat
-      );
-
-      const originalLon = Number(
-        marker._originalLon !== undefined ? marker._originalLon : marker.getLatLng().lng
-      );
-
-      // 검색 공항 longitude 기준으로 가장 가까운 NDB marker copy 선택
-      const fixedLatLng = toNdbLatLngNearReference(
-        originalLat,
-        originalLon,
-        airportLon
-      );
-
-      if (fixedLatLng) {
-        marker.setLatLng(fixedLatLng);
-      }
-
-      marker.addTo(ndbLayer);
-
-      if (!matchedMarker) {
-        matchedMarker = marker;
-        targetLatLng = fixedLatLng || [originalLat, originalLon];
-      }
+    if (name.includes(searchCode) && !matchedMarker) {
+      matchedMarker = marker;
     }
   });
 
   if (!matchedMarker) {
     return false;
   }
+
+  const lat = airport && Number.isFinite(Number(airport.lat))
+    ? Number(airport.lat)
+    : matchedMarker.getLatLng().lat;
+
+  const lon = airport && Number.isFinite(Number(airport.lon))
+    ? Number(airport.lon)
+    : matchedMarker.getLatLng().lng;
+
+  const targetLatLng = [lat, lon];
+
+  // 검색 결과에서는 geocode airport 좌표를 기준으로 강제 이동
+  matchedMarker.setLatLng(targetLatLng);
+  matchedMarker.addTo(ndbLayer);
 
   const address = airport && airport.name
     ? String(airport.name)
@@ -3549,22 +3535,19 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
 
   matchedMarker.openPopup();
 
-  // 핵심: popup open 이후 마지막에 다시 중앙 정렬
-  if (targetLatLng) {
+  map.setView(targetLatLng, 10, {
+    animate: false
+  });
+
+  setTimeout(() => {
     map.setView(targetLatLng, 10, {
       animate: false
     });
-
-    // 모바일/브라우저 렌더링 지연 보정
-    setTimeout(() => {
-      map.setView(targetLatLng, 10, {
-        animate: false
-      });
-    }, 50);
-  }
+  }, 80);
 
   return true;
 }
+
 
 
     
