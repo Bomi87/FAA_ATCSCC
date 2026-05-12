@@ -1548,6 +1548,68 @@ function renderDccVolcanicAshAdvisoryHtml() {
     </div>
   `;
 }    
+
+function isZnyRelatedAdvisory(a) {
+  const codes = [
+    a.controlElement,
+    ...(a.controlFacilityCodes || []),
+    ...(a.facilityCodes || [])
+  ]
+    .map(x => String(x || "").toUpperCase());
+
+  return codes.some(x => x.includes("ZNY"));
+}
+
+function getAdvisorySearchText(a) {
+  return [
+    a.title,
+    a.controlElement,
+    a.constrainedFacilities,
+    a.message,
+    a.rawText,
+    ...(a.airportCodes || []),
+    ...(a.facilityCodes || []),
+    ...(a.controlFacilityCodes || [])
+  ]
+    .join(" ")
+    .toUpperCase();
+}
+
+function getPhlcDisplayName(ap, advisoryList) {
+  const code = String(ap || "").toUpperCase();
+
+  // PHLC만 특별 처리
+  if (code !== "PHLC") return code;
+
+  const relatedList = (advisoryList || []).filter(isZnyRelatedAdvisory);
+
+  if (!relatedList.length) return code;
+
+  const text = relatedList.map(getAdvisorySearchText).join(" ");
+
+  const hasNewarkSatellite =
+    text.includes("NEWARK SATELLITE AIRPORTS") ||
+    text.includes("EWR SATELLITE AIRPORTS");
+
+  const hasEwr = /\bEWR\b/.test(text);
+  const hasTeb = /\bTEB\b/.test(text);
+
+  const labels = [];
+
+  // Satellite 문구가 있으면 EWR/TEB 권역으로 판단
+  if (hasNewarkSatellite) {
+    labels.push("EWR", "TEB");
+  } else {
+    if (hasEwr) labels.push("EWR");
+    if (hasTeb) labels.push("TEB");
+  }
+
+  const uniqueLabels = Array.from(new Set(labels));
+
+  if (!uniqueLabels.length) return code;
+
+  return code + "(" + uniqueLabels.join(", ") + ")";
+}
     
  function renderAirportRestrictionList() {
   const box = document.getElementById("airportRestrictionList");
@@ -1583,12 +1645,14 @@ if (!airports.length && !dccHtml && !volcanicAshHtml) {
             "</span>";
         }).join(" ");
 
-        return `
-          <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
-            <b>${escapeHtml(ap)}</b><br>
-            <span style="color:#6b7280;">${advNums}</span>
-          </div>
-        `;
+     const displayAp = getPhlcDisplayName(ap, list);
+
+return `
+  <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
+    <b>${escapeHtml(displayAp)}</b><br>
+    <span style="color:#6b7280;">${advNums}</span>
+  </div>
+`;
       }).join("")
     : "<div style='color:#6b7280; margin-bottom:8px;'>영향 공항 없음</div>";
 
