@@ -1208,6 +1208,59 @@ function zoomToVolcanicAdvisory(advisory) {
 
   return [safeLat, adjustedLon];
 }
+
+
+function shiftGeoJsonCoordsNearReference(coords, referenceLon) {
+  if (!Array.isArray(coords)) return coords;
+
+  // GeoJSON coordinate pair: [lon, lat] or [lon, lat, alt]
+  if (
+    coords.length >= 2 &&
+    typeof coords[0] === "number" &&
+    typeof coords[1] === "number"
+  ) {
+    const lon = Number(coords[0]);
+    const lat = Number(coords[1]);
+
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return coords;
+    }
+
+    const shiftedLon = shiftLonNearReference(lon, referenceLon);
+
+    if (coords.length > 2) {
+      return [shiftedLon, lat, ...coords.slice(2)];
+    }
+
+    return [shiftedLon, lat];
+  }
+
+  return coords.map(c => shiftGeoJsonCoordsNearReference(c, referenceLon));
+}
+
+function normalizeGeoJsonLongitudesNearReference(geojson, referenceLon) {
+  const copy = JSON.parse(JSON.stringify(geojson));
+
+  const features = copy.type === "FeatureCollection"
+    ? copy.features
+    : [copy];
+
+  features.forEach(feature => {
+    if (
+      feature &&
+      feature.geometry &&
+      feature.geometry.coordinates
+    ) {
+      feature.geometry.coordinates = shiftGeoJsonCoordsNearReference(
+        feature.geometry.coordinates,
+        referenceLon
+      );
+    }
+  });
+
+  return copy;
+}
+    
     function toRenderLatLng(lat, lon) {
       return [lat, shiftLonNearReference(lon, ROUTE_REFERENCE_LON)];
     }
@@ -2685,72 +2738,80 @@ if (window.innerWidth <= 767) {
   updateFaaLink();
 }
 
-    async function loadArtccGeojson() {
-      const res = await fetch("artcc.geojson?v=" + Date.now(), {
-        cache: "no-store"
+ async function loadArtccGeojson() {
+  const res = await fetch("artcc.geojson?v=" + Date.now(), {
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    throw new Error("artcc.geojson load failed");
+  }
+
+  const data = await res.json();
+
+  // ARTCC GeoJSON 도형을 미국 기준 경도(-100) 근처로 보정
+  // 알래스카/태평양 근처 도형이 오른쪽 world copy에 떨어지는 문제 방지
+  const normalizedData = normalizeGeoJsonLongitudesNearReference(
+    data,
+    ROUTE_REFERENCE_LON
+  );
+
+  const geoLayer = L.geoJSON(normalizedData, {
+    pane: "artccPane",
+    renderer: artccRenderer,
+
+    style: function () {
+      return getArtccStyle("normal");
+    },
+
+    onEachFeature: function (feature, layer) {
+      const p = feature.properties || {};
+      const ident = p.ident || p.facility || p.id || "";
+      const name = p.name || ident;
+
+      layer._artccIdent = ident;
+      artccLayerIndex[ident] = layer;
+
+      layer.bindTooltip(ident, {
+        permanent: true,
+        direction: "center",
+        className: "artcc-label",
+        opacity: 1
       });
 
-      if (!res.ok) {
-        throw new Error("artcc.geojson load failed");
-      }
+      layer.bindPopup(
+        "<div onclick=\"if (window.innerWidth <= 767) showMobilePanel('main');\" style=\"cursor:pointer;\">" +
+          "<b>" + escapeHtml(ident) + "</b><br>" +
+          escapeHtml(name) +
+        "</div>"
+      );
 
-      const data = await res.json();
-
-const geoLayer = L.geoJSON(data, {
-  pane: "artccPane",
-  renderer: artccRenderer,
-
-  style: function () {
-    return getArtccStyle("normal");
-  },
-
-        onEachFeature: function (feature, layer) {
-          const p = feature.properties || {};
-          const ident = p.ident || p.facility || p.id || "";
-          const name = p.name || ident;
-
-          layer._artccIdent = ident;
-          artccLayerIndex[ident] = layer;
-
-          layer.bindTooltip(ident, {
-            permanent: true,
-            direction: "center",
-            className: "artcc-label",
-            opacity: 1
-          });
-
- layer.bindPopup(
-  "<div onclick=\"if (window.innerWidth <= 767) showMobilePanel('main');\" style=\"cursor:pointer;\">" +
-    "<b>" + escapeHtml(ident) + "</b><br>" +
-    escapeHtml(name) +
-  "</div>"
-);
       layer.on("click", function (e) {
-  L.DomEvent.stopPropagation(e);
-  selectArtcc(layer, feature);
-});
+        L.DomEvent.stopPropagation(e);
+        selectArtcc(layer, feature);
+      });
 
-          layer.on("mouseover", function () {
-            if (ident !== selectedIdent) {
-              layer.setStyle({
-                weight: 3,
-                fillOpacity: 0.22
-              });
-            }
-          });
-
-          layer.on("mouseout", function () {
-            if (ident !== selectedIdent) {
-              layer.setStyle(getArtccStyle(getLayerStatusByCode(ident)));
-            }
+      layer.on("mouseover", function () {
+        if (ident !== selectedIdent) {
+          layer.setStyle({
+            weight: 3,
+            fillOpacity: 0.22
           });
         }
       });
 
-      geoLayer.addTo(artccGroup);
-
-     map.setView([39.5, -98.5], getDefaultMapZoom());
+      layer.on("mouseout", function () {
+        if (ident !== selectedIdent) {
+          layer.setStyle(getArtccStyle(getLayerStatusByCode(ident)));
+        }
+      });
     }
+  });
+
+  geoLayer.addTo(artccGroup);
+
+  map.setView([39.5, -98.5], getDefaultMapZoom());
+}
 
     /*******************************************************
      * KML Style Parser
