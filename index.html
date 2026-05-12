@@ -1211,6 +1211,22 @@ function zoomToVolcanicAdvisory(advisory) {
     function toRenderLatLng(lat, lon) {
       return [lat, shiftLonNearReference(lon, ROUTE_REFERENCE_LON)];
     }
+function toNdbLatLngNearReference(lat, lon, referenceLon) {
+  const safeLat = Number(lat);
+  const safeLon = Number(lon);
+  const safeReferenceLon = Number(referenceLon);
+
+  if (!Number.isFinite(safeLat) || !Number.isFinite(safeLon)) {
+    return null;
+  }
+
+  const adjustedLon = Number.isFinite(safeReferenceLon)
+    ? shiftLonNearReference(safeLon, safeReferenceLon)
+    : shiftLonNearReference(safeLon, map.getCenter().lng);
+
+  return [safeLat, adjustedLon];
+}
+    
 function getDefaultMapZoom() {
   return window.innerWidth <= 767 ? 3 : 4;
 }
@@ -3469,11 +3485,14 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
 
   let matchedMarker = null;
 
+  const airportLon = airport && Number.isFinite(Number(airport.lon))
+    ? Number(airport.lon)
+    : map.getCenter().lng;
+
   ndbMarkers.forEach(marker => {
     const name = String(marker._ndbName || "").toUpperCase();
 
     if (name.includes(searchCode)) {
-      // 검색 시점의 현재 지도 중심 기준으로 NDB marker 경도 재보정
       const originalLat = Number(
         marker._originalLat !== undefined ? marker._originalLat : marker.getLatLng().lat
       );
@@ -3482,7 +3501,12 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
         marker._originalLon !== undefined ? marker._originalLon : marker.getLatLng().lng
       );
 
-      const fixedLatLng = toNdbLatLngForCurrentMap(originalLat, originalLon);
+      // 핵심: 현재 지도 중심이 아니라 검색된 공항 longitude 기준으로 NDB marker 경도 보정
+      const fixedLatLng = toNdbLatLngNearReference(
+        originalLat,
+        originalLon,
+        airportLon
+      );
 
       if (fixedLatLng) {
         marker.setLatLng(fixedLatLng);
@@ -3621,28 +3645,42 @@ async function zoomToAirportByIcao(icao) {
       alert(code + " 공항 위치를 찾을 수 없습니다.");
       return;
     }
-map.setView([airport.lat, airport.lon], 10);
 
-// NDB 리스트에 같은 ICAO가 있으면 NDB 아이콘 표시 + 짧은 공항명 popup
-const hasNdbMarker = await showNdbMarkerIfExistsByIcao(code, airport);
+    const lat = Number(airport.lat);
+    const lon = Number(airport.lon);
 
-// NDB marker가 없을 때만 일반 popup 표시
-if (!hasNdbMarker) {
-  L.popup()
-    .setLatLng([airport.lat, airport.lon])
-.setContent(
-  "<b>" + escapeHtml(code) + "</b><br>" +
-  escapeHtml(airport.name || code)
-)
-    .openOn(map);
-}
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      alert(code + " 공항 좌표가 올바르지 않습니다.");
+      return;
+    }
+
+    airport.lat = lat;
+    airport.lon = lon;
+
+    map.setView([lat, lon], 10, {
+      animate: false
+    });
+
+    const hasNdbMarker = await showNdbMarkerIfExistsByIcao(code, airport);
+
+    if (!hasNdbMarker) {
+      L.popup({
+        ...POPUP_OPTIONS,
+        autoPan: false
+      })
+        .setLatLng([lat, lon])
+        .setContent(
+          "<b>" + escapeHtml(code) + "</b><br>" +
+          escapeHtml(airport.name || code)
+        )
+        .openOn(map);
+    }
 
   } catch (err) {
     console.error(err);
     alert(code + " 공항 검색 실패: " + err.message);
   }
 }
-
 
     
 function initNdbFixedControl() {
