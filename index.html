@@ -2621,11 +2621,7 @@ async function toggleTfrLayer() {
     alert("TFR 로드 실패: " + err.message);
   }
 }
-    function getLayerStatusByCode(code) {
-      if (selectedIdent && code === selectedIdent) return "selected";
-      if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) return "hasAdvisory";
-      return "normal";
-    }
+    
 
     function selectArtcc(layer, feature) {
       const p = feature.properties || {};
@@ -3351,17 +3347,7 @@ document.addEventListener("click", function (e) {
   isAdvisoryDetailOpen = false;
 });
 
-function setMobilePanelButtonActive(panelName) {
-  const buttons = document.querySelectorAll(".mobile-panel-buttons button");
 
-  buttons.forEach(btn => {
-    btn.classList.remove("active");
-
-    if (btn.dataset.panel === panelName) {
-      btn.classList.add("active");
-    }
-  });
-}
       
 function setMobilePanelButtonActive(panelName) {
   const buttons = document.querySelectorAll(".mobile-panel-buttons button");
