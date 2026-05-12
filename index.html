@@ -3484,10 +3484,15 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
   ndbLayer.clearLayers();
 
   let matchedMarker = null;
+  let targetLatLng = null;
+
+  const airportLat = airport && Number.isFinite(Number(airport.lat))
+    ? Number(airport.lat)
+    : null;
 
   const airportLon = airport && Number.isFinite(Number(airport.lon))
     ? Number(airport.lon)
-    : map.getCenter().lng;
+    : null;
 
   ndbMarkers.forEach(marker => {
     const name = String(marker._ndbName || "").toUpperCase();
@@ -3501,7 +3506,7 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
         marker._originalLon !== undefined ? marker._originalLon : marker.getLatLng().lng
       );
 
-      // 핵심: 현재 지도 중심이 아니라 검색된 공항 longitude 기준으로 NDB marker 경도 보정
+      // 검색 공항 longitude 기준으로 가장 가까운 NDB marker copy 선택
       const fixedLatLng = toNdbLatLngNearReference(
         originalLat,
         originalLon,
@@ -3516,6 +3521,7 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
 
       if (!matchedMarker) {
         matchedMarker = marker;
+        targetLatLng = fixedLatLng || [originalLat, originalLon];
       }
     }
   });
@@ -3536,100 +3542,32 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
     ),
     {
       ...POPUP_OPTIONS,
-      autoPan: false
+      autoPan: false,
+      keepInView: false
     }
   );
 
   matchedMarker.openPopup();
 
+  // 핵심: popup open 이후 마지막에 다시 중앙 정렬
+  if (targetLatLng) {
+    map.setView(targetLatLng, 10, {
+      animate: false
+    });
+
+    // 모바일/브라우저 렌더링 지연 보정
+    setTimeout(() => {
+      map.setView(targetLatLng, 10, {
+        animate: false
+      });
+    }, 50);
+  }
+
   return true;
 }
 
-function getShortAirportNameFromGeocodeName(name, fallbackCode) {
-  const s = String(name || "").trim();
 
-  if (!s) {
-    return fallbackCode || "";
-  }
-
-  return s.split(",")[0].trim();
-}
-
-async function showNdbMarkerIfExistsByIcao(code, airport) {
-  const searchCode = String(code || "")
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 4);
-
-  if (!/^[A-Z]{4}$/.test(searchCode)) {
-    return false;
-  }
-
-  const button = document.getElementById("ndbToggleBtn");
-
-  if (!ndbLoaded) {
-    if (button) {
-      button.disabled = true;
-      button.textContent = "Loading";
-    }
-
-    await loadNdbAirports();
-    ndbLoaded = true;
-
-    if (button) {
-      button.disabled = false;
-    }
-  }
-
-  if (!map.hasLayer(ndbLayer)) {
-    map.addLayer(ndbLayer);
-  }
-
-  ndbVisible = true;
-
-  if (button) {
-    button.textContent = "NDB ON";
-    button.classList.add("active");
-  }
-
-  ndbLayer.clearLayers();
-
-  let matchedMarker = null;
-
-  ndbMarkers.forEach(marker => {
-    const name = String(marker._ndbName || "").toUpperCase();
-
-    if (name.includes(searchCode)) {
-      marker.addTo(ndbLayer);
-
-      if (!matchedMarker) {
-        matchedMarker = marker;
-      }
-    }
-  });
-
-  if (!matchedMarker) {
-    return false;
-  }
-
-const address = airport && airport.name
-  ? String(airport.name)
-  : "";
-
-matchedMarker.bindPopup(
-  buildPopupHtml(
-    searchCode,
-    address ? escapeHtml(address) : "",
-    []
-  ),
-  POPUP_OPTIONS
-);
-
-  matchedMarker.openPopup();
-
-  return true;
-}
+    
   
 async function zoomToAirportByIcao(icao) {
   const code = String(icao || "").trim().toUpperCase();
@@ -3657,7 +3595,9 @@ async function zoomToAirportByIcao(icao) {
     airport.lat = lat;
     airport.lon = lon;
 
-    map.setView([lat, lon], 10, {
+    const airportLatLng = [lat, lon];
+
+    map.setView(airportLatLng, 10, {
       animate: false
     });
 
@@ -3666,14 +3606,26 @@ async function zoomToAirportByIcao(icao) {
     if (!hasNdbMarker) {
       L.popup({
         ...POPUP_OPTIONS,
-        autoPan: false
+        autoPan: false,
+        keepInView: false
       })
-        .setLatLng([lat, lon])
+        .setLatLng(airportLatLng)
         .setContent(
           "<b>" + escapeHtml(code) + "</b><br>" +
           escapeHtml(airport.name || code)
         )
         .openOn(map);
+
+      // 일반 popup도 마지막에 다시 중앙 정렬
+      map.setView(airportLatLng, 10, {
+        animate: false
+      });
+
+      setTimeout(() => {
+        map.setView(airportLatLng, 10, {
+          animate: false
+        });
+      }, 50);
     }
 
   } catch (err) {
