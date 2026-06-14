@@ -1054,7 +1054,8 @@ polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
 
 polygon.on("click", function (e) {
   if (e && e.originalEvent) {
-    L.DomEvent.stopPropagation(e);
+    L.DomEvent.stopPropagation(e.originalEvent);
+    L.DomEvent.preventDefault(e.originalEvent);
   }
 
   // 도형 popup도 열고
@@ -2191,44 +2192,62 @@ async function loadBaseballTfrLayer() {
 
   baseballTfrLayer.clearLayers();
 
- const geoLayer = L.geoJSON(data, {
-  pane: "baseballTfrPane",
-  renderer: baseballTfrRenderer,
-  style: getBaseballTfrStyle,
+  const geoLayer = L.geoJSON(data, {
+    pane: "baseballTfrPane",
+    renderer: baseballTfrRenderer,
+    style: getBaseballTfrStyle,
+    interactive: true,
+    bubblingMouseEvents: false,
 
     onEachFeature: function (feature, layer) {
       layer.bindPopup(buildBaseballTfrPopupHtml(feature), POPUP_OPTIONS);
 
       let isClickedPopup = false;
 
-      layer.on("mouseover", function (e) {
-        if (layer.setStyle) {
-          layer.setStyle({
-            weight: 3,
-            fillOpacity: 0.25
-          });
-        }
-
-        if (!isClickedPopup) {
-          layer.openPopup(e.latlng);
-        }
-      });
-
-      layer.on("mouseout", function () {
-        if (layer.setStyle) {
-          layer.setStyle(getBaseballTfrStyle());
-        }
-
-        if (!isClickedPopup) {
-          layer.closePopup();
-        }
-      });
-
       layer.on("click", function (e) {
-        L.DomEvent.stopPropagation(e);
+        if (e && e.originalEvent) {
+          L.DomEvent.stopPropagation(e.originalEvent);
+          L.DomEvent.preventDefault(e.originalEvent);
+        }
+
         isClickedPopup = true;
-        layer.openPopup(e.latlng);
+
+        const latlng = e && e.latlng
+          ? e.latlng
+          : layer.getBounds().getCenter();
+
+        layer.openPopup(latlng);
       });
+
+      // 모바일에서는 hover popup이 의미 없고 성능만 떨어뜨리므로 PC에서만 사용
+      if (window.innerWidth > 767) {
+        layer.on("mouseover", function (e) {
+          if (layer.setStyle) {
+            layer.setStyle({
+              weight: 3,
+              fillOpacity: 0.25
+            });
+          }
+
+          if (!isClickedPopup) {
+            const latlng = e && e.latlng
+              ? e.latlng
+              : layer.getBounds().getCenter();
+
+            layer.openPopup(latlng);
+          }
+        });
+
+        layer.on("mouseout", function () {
+          if (layer.setStyle) {
+            layer.setStyle(getBaseballTfrStyle());
+          }
+
+          if (!isClickedPopup) {
+            layer.closePopup();
+          }
+        });
+      }
 
       layer.on("popupclose", function () {
         isClickedPopup = false;
@@ -2721,37 +2740,67 @@ async function loadTfrLayer() {
 
   tfrLayer.clearLayers();
 
-const geoLayer = L.geoJSON(data, {
-  pane: "tfrPane",
-  renderer: tfrRenderer,
-  style: getTfrStyle,
+  const geoLayer = L.geoJSON(data, {
+    pane: "tfrPane",
+    renderer: tfrRenderer,
+    style: getTfrStyle,
+    interactive: true,
+    bubblingMouseEvents: false,
 
-  onEachFeature: function (feature, layer) {
-    layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
+    onEachFeature: function (feature, layer) {
+      layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
 
-    layer.on("click", function (e) {
-      L.DomEvent.stopPropagation(e);
-      layer.openPopup(e.latlng);
-    });
+      let isClickedPopup = false;
 
-    // 모바일에서는 hover popup이 의미 없고 성능만 떨어뜨리므로 PC에서만 사용
-    if (window.innerWidth > 767) {
-      layer.on("mouseover", function () {
-        if (layer.setStyle) {
-          layer.setStyle({
-            weight: 3,
-            fillOpacity: 0.28
-          });
+      layer.on("click", function (e) {
+        if (e && e.originalEvent) {
+          L.DomEvent.stopPropagation(e.originalEvent);
+          L.DomEvent.preventDefault(e.originalEvent);
         }
+
+        isClickedPopup = true;
+
+        const latlng = e && e.latlng
+          ? e.latlng
+          : layer.getBounds().getCenter();
+
+        layer.openPopup(latlng);
       });
 
-      layer.on("mouseout", function () {
-        if (layer.setStyle) {
-          layer.setStyle(getTfrStyle(feature));
-        }
+      // 모바일에서는 hover popup이 의미 없고 성능만 떨어뜨리므로 PC에서만 사용
+      if (window.innerWidth > 767) {
+        layer.on("mouseover", function (e) {
+          if (layer.setStyle) {
+            layer.setStyle({
+              weight: 3,
+              fillOpacity: 0.28
+            });
+          }
+
+          if (!isClickedPopup) {
+            const latlng = e && e.latlng
+              ? e.latlng
+              : layer.getBounds().getCenter();
+
+            layer.openPopup(latlng);
+          }
+        });
+
+        layer.on("mouseout", function () {
+          if (layer.setStyle) {
+            layer.setStyle(getTfrStyle(feature));
+          }
+
+          if (!isClickedPopup) {
+            layer.closePopup();
+          }
+        });
+      }
+
+      layer.on("popupclose", function () {
+        isClickedPopup = false;
       });
     }
-  }
   });
 
   geoLayer.addTo(tfrLayer);
