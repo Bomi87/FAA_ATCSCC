@@ -721,7 +721,7 @@ input {
 const NDB_KML_URL = "https://bomi87.github.io/FLIGHT_MAP/ACJ_NDB.kml?v=" + Date.now();
 
 const FAA_APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxX8srF8W-kQiua6_8E06u0zOEbNh2bICwBR75_LviXCSkXd0RwNp6Eyv1OHgw9vWdUZg/exec";
+  "https://script.google.com/macros/s/AKfycbznlq5cXQAIyoq4Y6LRfM9FmUbXwX6jnVqao9PVnJQIGxIjgLVTEftrmkf-kLdMqNbMYA/exec";
 
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
@@ -765,8 +765,14 @@ map.getPane("baseballTfrPane").style.zIndex = 435;
 map.createPane("routePane");
 map.getPane("routePane").style.zIndex = 450;
     const artccRenderer = L.svg({ pane: "artccPane" });
-const tfrRenderer = L.svg({ pane: "tfrPane" });
-const baseballTfrRenderer = L.svg({ pane: "baseballTfrPane" });
+const tfrRenderer = L.canvas({
+  pane: "tfrPane",
+  padding: 0.5
+});
+const baseballTfrRenderer = L.canvas({
+  pane: "baseballTfrPane",
+  padding: 0.5
+});
     
     const streetMap = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
@@ -1435,7 +1441,7 @@ async function loadAllAdvisoriesForDate() {
     "&includeDetails=true";
 
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { cache: "default" });
     const data = await res.json();
 
     if (!data.ok) {
@@ -1691,7 +1697,6 @@ function getAdvisorySearchText(a) {
     a.controlElement,
     a.constrainedFacilities,
     a.message,
-    a.rawText,
     ...(a.airportCodes || []),
     ...(a.facilityCodes || []),
     ...(a.controlFacilityCodes || [])
@@ -1958,7 +1963,7 @@ box.innerHTML = `
         "&includeDetails=true";
 
       try {
-        const res = await fetch(url, { cache: "no-store" });
+        const res = await fetch(url, { cache: "default" });
         const data = await res.json();
 
         if (!data.ok) {
@@ -2722,47 +2727,31 @@ const geoLayer = L.geoJSON(data, {
   style: getTfrStyle,
 
   onEachFeature: function (feature, layer) {
-  layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
+    layer.bindPopup(buildTfrPopupHtml(feature), POPUP_OPTIONS);
 
-  let isClickedPopup = false;
+    layer.on("click", function (e) {
+      L.DomEvent.stopPropagation(e);
+      layer.openPopup(e.latlng);
+    });
 
-  layer.on("mouseover", function (e) {
-    if (layer.setStyle) {
-      layer.setStyle({
-        weight: 3,
-        fillOpacity: 0.28
+    // 모바일에서는 hover popup이 의미 없고 성능만 떨어뜨리므로 PC에서만 사용
+    if (window.innerWidth > 767) {
+      layer.on("mouseover", function () {
+        if (layer.setStyle) {
+          layer.setStyle({
+            weight: 3,
+            fillOpacity: 0.28
+          });
+        }
+      });
+
+      layer.on("mouseout", function () {
+        if (layer.setStyle) {
+          layer.setStyle(getTfrStyle(feature));
+        }
       });
     }
-
-    // 클릭해서 고정된 팝업이 아닐 때만 hover 팝업 표시
-    if (!isClickedPopup) {
-      layer.openPopup(e.latlng);
-    }
-  });
-
-  layer.on("mouseout", function () {
-    if (layer.setStyle) {
-      layer.setStyle(getTfrStyle(feature));
-    }
-
-    // 클릭한 팝업은 유지, hover 팝업만 닫기
-    if (!isClickedPopup) {
-      layer.closePopup();
-    }
-  });
-
-layer.on("click", function (e) {
-  L.DomEvent.stopPropagation(e);
-
-  isClickedPopup = true;
-  layer.openPopup(e.latlng);
-});
-
-  layer.on("popupclose", function () {
-    // 사용자가 X 누르거나 다른 팝업 열어서 닫히면 고정 상태 해제
-    isClickedPopup = false;
-  });
-}
+  }
   });
 
   geoLayer.addTo(tfrLayer);
@@ -3530,7 +3519,7 @@ marker.bindTooltip(escapeHtml(name), {
         routeLayer.clearLayers();
 
         const url = getRouteKmlUrl(aircraft);
-        const res = await fetch(url, { cache: "no-store" });
+        const res = await fetch(url, { cache: "default" });
 
         if (!res.ok) {
           throw new Error("KML load failed: " + res.status);
