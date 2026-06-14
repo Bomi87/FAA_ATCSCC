@@ -1055,7 +1055,7 @@ polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
 polygon.on("click", function (e) {
   if (e && e.originalEvent) {
     L.DomEvent.stopPropagation(e.originalEvent);
-    L.DomEvent.preventDefault(e.originalEvent);
+  
   }
 
   // 도형 popup도 열고
@@ -2207,7 +2207,7 @@ async function loadBaseballTfrLayer() {
       layer.on("click", function (e) {
         if (e && e.originalEvent) {
           L.DomEvent.stopPropagation(e.originalEvent);
-          L.DomEvent.preventDefault(e.originalEvent);
+      
         }
 
         isClickedPopup = true;
@@ -2752,10 +2752,36 @@ async function loadTfrLayer() {
 
       let isClickedPopup = false;
 
+      layer.on("mouseover", function (e) {
+        if (layer.setStyle) {
+          layer.setStyle({
+            weight: 3,
+            fillOpacity: 0.28
+          });
+        }
+
+        if (!isClickedPopup) {
+          const latlng = e && e.latlng
+            ? e.latlng
+            : layer.getBounds().getCenter();
+
+          layer.openPopup(latlng);
+        }
+      });
+
+      layer.on("mouseout", function () {
+        if (layer.setStyle) {
+          layer.setStyle(getTfrStyle(feature));
+        }
+
+        if (!isClickedPopup) {
+          layer.closePopup();
+        }
+      });
+
       layer.on("click", function (e) {
         if (e && e.originalEvent) {
           L.DomEvent.stopPropagation(e.originalEvent);
-          L.DomEvent.preventDefault(e.originalEvent);
         }
 
         isClickedPopup = true;
@@ -2766,36 +2792,6 @@ async function loadTfrLayer() {
 
         layer.openPopup(latlng);
       });
-
-      // 모바일에서는 hover popup이 의미 없고 성능만 떨어뜨리므로 PC에서만 사용
-      if (window.innerWidth > 767) {
-        layer.on("mouseover", function (e) {
-          if (layer.setStyle) {
-            layer.setStyle({
-              weight: 3,
-              fillOpacity: 0.28
-            });
-          }
-
-          if (!isClickedPopup) {
-            const latlng = e && e.latlng
-              ? e.latlng
-              : layer.getBounds().getCenter();
-
-            layer.openPopup(latlng);
-          }
-        });
-
-        layer.on("mouseout", function () {
-          if (layer.setStyle) {
-            layer.setStyle(getTfrStyle(feature));
-          }
-
-          if (!isClickedPopup) {
-            layer.closePopup();
-          }
-        });
-      }
 
       layer.on("popupclose", function () {
         isClickedPopup = false;
@@ -2809,7 +2805,7 @@ async function loadTfrLayer() {
 
   return data;
 }
-
+    
 async function toggleTfrLayer() {
   const button = document.getElementById("tfrToggleBtn");
 
