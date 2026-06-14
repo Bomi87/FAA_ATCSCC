@@ -2132,7 +2132,10 @@ if (p.eventType) {
 html += `<tr><td>Basis</td><td>
   <a
     href="https://tfr.faa.gov/tfr3/?page=detail_0_0367"
-    onclick="event.stopPropagation(); window.location.href=this.href; return false;"
+    target="_blank"
+    rel="noopener noreferrer"
+    onclick="event.stopPropagation();"
+    ontouchend="event.stopPropagation();"
     style="color:#0284c7; font-weight:600; text-decoration:underline;"
   >
     FDC 0/0367
@@ -2701,8 +2704,10 @@ if (detailUrl) {
   html += `<tr><td>FAA</td><td>
     <a
       href="${escapeHtml(detailUrl)}"
-      ontouchend="event.preventDefault(); event.stopPropagation(); window.location.href=this.href; return false;"
-      onclick="event.preventDefault(); event.stopPropagation(); window.location.href=this.href; return false;"
+      target="_blank"
+      rel="noopener noreferrer"
+      onclick="event.stopPropagation();"
+      ontouchend="event.stopPropagation();"
       style="color:#0284c7; font-weight:600; text-decoration:underline;"
     >
       Open Detail
