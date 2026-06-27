@@ -4062,13 +4062,7 @@ function startArtccAppAfterAuth() {
 }
 
 (function waitForPortalAuth() {
-  if (sessionStorage.getItem("portalApproved") === "true") {
-    startArtccAppAfterAuth();
-    return;
-  }
-
   if (window.CURRENT_PORTAL_USER) {
-    sessionStorage.setItem("portalApproved", "true");
     startArtccAppAfterAuth();
     return;
   }
