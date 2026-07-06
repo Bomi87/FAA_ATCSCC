@@ -855,6 +855,46 @@ let advisoryCacheLoadedAt = 0;
 let advisoryCacheDate = "";
 const ADVISORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 
+// Canadian FIR 추가
+// - CZQ는 FAA Advisory 대표 코드
+// - artcc.geojson 지도 도형은 CZQM / CZQX로 분리되어 있으므로, 색칠 시 둘 다 확장
+const MAP_FACILITY_CODES = new Set([
+  "ZAB", "ZAN", "ZAU", "ZBW", "ZDC", "ZDV", "ZFW", "ZHU", "ZID", "ZJX", "ZKC",
+  "ZLA", "ZLC", "ZMA", "ZME", "ZMP", "ZNY", "ZOA", "ZOB", "ZSE", "ZSU", "ZTL",
+  "CZV", "CZE", "CZW", "CZY", "CZU", "CZQ", "CZQM", "CZQX"
+]);
+
+const CANADIAN_FIR_ALIAS_TO_DISPLAY = {
+  "CZVR": "CZV",
+  "CZEG": "CZE",
+  "CZWG": "CZW",
+  "CZYZ": "CZY",
+  "CZUL": "CZU",
+  "CZQ": "CZQ",
+  "CZQM": "CZQM",
+  "CZQX": "CZQX"
+};
+
+function normalizeMapFacilityCode(code) {
+  const c = String(code || "").toUpperCase().trim();
+  if (!c) return "";
+  if (MAP_FACILITY_CODES.has(c)) return c;
+  if (CANADIAN_FIR_ALIAS_TO_DISPLAY[c]) return CANADIAN_FIR_ALIAS_TO_DISPLAY[c];
+  return "";
+}
+
+function expandMapFacilityCodes(code) {
+  const c = normalizeMapFacilityCode(code);
+  if (!c) return [];
+
+  // FAA Advisory의 CZQ는 지도상 CZQM + CZQX 두 구역 모두 의미
+  if (c === "CZQ") {
+    return ["CZQM", "CZQX"];
+  }
+
+  return [c];
+}
+
 let isAllAdvisoryLoading = false;
     let previousAdvisoryBoxHtml = "";
 let isAdvisoryDetailOpen = false;
@@ -1541,11 +1581,14 @@ async function refreshAdvisoryData() {
 
       allAdvisoriesCache.forEach(a => {
         // 중요: 지도 색칠은 CONTROL ELEMENT 기준만 사용
-        (a.controlFacilityCodes || []).forEach(code => {
-          if (!facilityAdvisoryMap[code]) {
-            facilityAdvisoryMap[code] = [];
-          }
-          facilityAdvisoryMap[code].push(a);
+        // Canadian FIR: CZQ Advisory는 CZQM/CZQX 두 지도 도형에 같이 매핑
+        (a.controlFacilityCodes || []).forEach(rawCode => {
+          expandMapFacilityCodes(rawCode).forEach(code => {
+            if (!facilityAdvisoryMap[code]) {
+              facilityAdvisoryMap[code] = [];
+            }
+            facilityAdvisoryMap[code].push(a);
+          });
         });
       });
     }
@@ -1758,8 +1801,8 @@ if (!airports.length && !dccHtml && !volcanicAshHtml) {
         const advNums = list.map((a, idx) => {
           const firCodes = Array.from(new Set(
             (a.facilityCodes || [])
-              .map(code => String(code || "").toUpperCase())
-              .filter(code => /^Z[A-Z]{2}$/.test(code))
+              .map(code => normalizeMapFacilityCode(code))
+              .filter(Boolean)
           )).join("/");
 
           const comma = idx < list.length - 1 ? "," : "";
@@ -1900,7 +1943,7 @@ box.innerHTML = `
 
     function renderAdvisoriesForFacilityFromCache(ident) {
   const box = document.getElementById("advisoryBox");
-  const code = String(ident || "").toUpperCase();
+  const code = normalizeMapFacilityCode(ident) || String(ident || "").toUpperCase();
 
  const matches = (facilityAdvisoryMap[code] || [])
   .slice()
@@ -2903,8 +2946,14 @@ async function toggleTfrLayer() {
 
     function selectArtcc(layer, feature) {
       const p = feature.properties || {};
-      const ident = p.ident || p.facility || p.id || "";
-      const name = p.name || ident;
+      const ident =
+        normalizeMapFacilityCode(p.displayIdent) ||
+        normalizeMapFacilityCode(p.ident) ||
+        normalizeMapFacilityCode(p.facility) ||
+        normalizeMapFacilityCode(p.icaoFir) ||
+        normalizeMapFacilityCode(p.fullIdent) ||
+        String(p.ident || p.facility || p.id || "").toUpperCase();
+      const name = p.name || p.fullIdent || p.icaoFir || ident;
 
       selectedLayer = layer;
       selectedIdent = ident;
@@ -2989,8 +3038,14 @@ if (window.innerWidth <= 767) {
 
     onEachFeature: function (feature, layer) {
       const p = feature.properties || {};
-      const ident = p.ident || p.facility || p.id || "";
-      const name = p.name || ident;
+      const ident =
+        normalizeMapFacilityCode(p.displayIdent) ||
+        normalizeMapFacilityCode(p.ident) ||
+        normalizeMapFacilityCode(p.facility) ||
+        normalizeMapFacilityCode(p.icaoFir) ||
+        normalizeMapFacilityCode(p.fullIdent) ||
+        String(p.ident || p.facility || p.id || "").toUpperCase();
+      const name = p.name || p.fullIdent || p.icaoFir || ident;
 
       layer._artccIdent = ident;
       artccLayerIndex[ident] = layer;
