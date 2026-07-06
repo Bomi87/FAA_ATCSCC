@@ -1039,24 +1039,6 @@ function getVolcanicLayerStyle(layer) {
   };
 }
 
-function getMeanLongitudeForCoords(coords) {
-  if (!Array.isArray(coords) || !coords.length) return ROUTE_REFERENCE_LON;
-
-  let sum = 0;
-  let count = 0;
-
-  coords.forEach(p => {
-    const lon = Number(p && p.lon);
-    if (Number.isFinite(lon)) {
-      sum += lon;
-      count += 1;
-    }
-  });
-
-  if (!count) return ROUTE_REFERENCE_LON;
-
-  return sum / count;
-}
 
 function makeVolcanicLayerLatLngs(layer) {
   const coords = (layer.polygon || [])
@@ -1074,9 +1056,12 @@ function makeVolcanicLayerLatLngs(layer) {
 
   if (coords.length < 3) return [];
 
-  // 화산재 polygon이 ±180도 경도선을 넘을 때 전 세계로 길게 늘어지는 현상 방지
-  const referenceLon = getMeanLongitudeForCoords(coords);
-  return unwrapCoordSequence(coords, referenceLon);
+  // 중요:
+  // 평균경도 기준으로 잡으면 캄차카 화산재가 동경 160E 쪽,
+  // 즉 화면 오른쪽 러시아/일본 쪽에 표시됨.
+  // 이 앱은 북미/알래스카/태평양 항로 기준이므로
+  // ROUTE_REFERENCE_LON(-100) 기준으로 당겨서 표시해야 함.
+  return unwrapCoordSequence(coords, ROUTE_REFERENCE_LON);
 }
 
 function buildVolcanicPopupHtml(advisory, ash, layer) {
