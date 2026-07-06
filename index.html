@@ -1032,7 +1032,7 @@ function getVolcanicLayerStyle(layer) {
 }
 
 function makeVolcanicLayerLatLngs(layer) {
-  return (layer.polygon || [])
+  const coords = (layer.polygon || [])
     .map(p => {
       if (!Array.isArray(p) || p.length < 2) return null;
 
@@ -1041,9 +1041,15 @@ function makeVolcanicLayerLatLngs(layer) {
 
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
-      return [lat, lon];
+      return { lat, lon };
     })
     .filter(Boolean);
+
+  if (coords.length < 3) return [];
+
+  // 화산재 polygon은 베링해/캄차카/태평양 쪽에서 ±180 경도선을 넘을 수 있음.
+  // 좌표를 순서대로 이어가며 경도 차이가 180도를 넘지 않게 unwrap 처리.
+  return unwrapCoordSequence(coords, ROUTE_REFERENCE_LON);
 }
 
 function buildVolcanicPopupHtml(advisory, ash, layer) {
