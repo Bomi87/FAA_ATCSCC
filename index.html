@@ -750,13 +750,6 @@ function clearVolcanicAshLayers() {
     volcanicAshLayerGroup.clearLayers();
   }
 }   
-
-// Volcanic ash polygon은 시각 표시 전용.
-// FIR/ARTCC 클릭을 막지 않도록 별도 pane에 올리고 pointer event를 통과시킴.
-map.createPane("volcanicAshPane");
-map.getPane("volcanicAshPane").style.zIndex = 405;
-map.getPane("volcanicAshPane").style.pointerEvents = "none";
-
 map.createPane("artccPane");
 map.getPane("artccPane").style.zIndex = 410;
 
@@ -771,6 +764,11 @@ map.getPane("baseballTfrPane").style.zIndex = 435;
 
 map.createPane("routePane");
 map.getPane("routePane").style.zIndex = 450;
+
+// 화산재 도형 클릭 우선: FIR/ARTCC보다 위에 두고 polygon 클릭을 받음
+map.createPane("volcanicAshPane");
+map.getPane("volcanicAshPane").style.zIndex = 455;
+map.getPane("volcanicAshPane").style.pointerEvents = "auto";
     const artccRenderer = L.svg({ pane: "artccPane" });
 const tfrRenderer = L.canvas({
   pane: "tfrPane",
@@ -1035,10 +1033,10 @@ function getVolcanicLayerStyle(layer) {
     opacity: 0.95,
     fillColor: color,
     fillOpacity,
-    interactive: false
+    interactive: true,
+    bubblingMouseEvents: false
   };
 }
-
 
 function makeVolcanicLayerLatLngs(layer) {
   const coords = (layer.polygon || [])
@@ -1056,14 +1054,11 @@ function makeVolcanicLayerLatLngs(layer) {
 
   if (coords.length < 3) return [];
 
-  // 중요:
-  // 평균경도 기준으로 잡으면 캄차카 화산재가 동경 160E 쪽,
-  // 즉 화면 오른쪽 러시아/일본 쪽에 표시됨.
-  // 이 앱은 북미/알래스카/태평양 항로 기준이므로
-  // ROUTE_REFERENCE_LON(-100) 기준으로 당겨서 표시해야 함.
+  // 캄차카/베링해 등 ±180도 경도선 근처 화산재 polygon이
+  // 지도 오른쪽 world copy로 밀리거나 길게 찢어지지 않도록
+  // 앱의 북미/태평양 기준 경도(-100)로 unwrap 처리
   return unwrapCoordSequence(coords, ROUTE_REFERENCE_LON);
 }
-
 function buildVolcanicPopupHtml(advisory, ash, layer) {
   const baseTimeLabel = ash.estVaDtg
     ? "EST VA DTG"
@@ -1103,30 +1098,28 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
   const latLngs = makeVolcanicLayerLatLngs(layer);
   if (latLngs.length < 3) return;
 
+  // 화산재 도형 클릭 우선: FIR/ARTCC보다 위 pane에서 클릭 처리
   const polygon = L.polygon(latLngs, getVolcanicLayerStyle(layer));
 
-polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
+  polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
 
-polygon.on("click", function (e) {
-  if (e && e.originalEvent) {
-    L.DomEvent.stopPropagation(e.originalEvent);
-  
-  }
+  polygon.on("click", function (e) {
+    if (e && e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+    }
 
-  // 도형 popup도 열고
-  polygon.openPopup(e.latlng);
+    polygon.openPopup(e.latlng);
 
+    // 도형 클릭 시: 왼쪽 Info 창에 해당 Advisory 요약 표시, zoom은 유지
+    showDccInfoAdvisorySummary(advisory.advn, true);
 
-// 도형 클릭 시: 왼쪽 Info 창에 해당 Advisory 요약 표시, zoom은 유지
-showDccInfoAdvisorySummary(advisory.advn, true);
+    // 모바일이면 Info 패널 열기
+    if (window.innerWidth <= 767) {
+      showMobilePanel("main");
+    }
+  });
 
-  // 모바일이면 Info 패널 열기
-  if (window.innerWidth <= 767) {
-    showMobilePanel("main");
-  }
-});
-
-polygon.addTo(volcanicAshLayerGroup);
+  polygon.addTo(volcanicAshLayerGroup);
 
   if (polygon.bringToFront) {
     polygon.bringToFront();
@@ -1137,7 +1130,6 @@ polygon.addTo(volcanicAshLayerGroup);
     boundsList.push(b);
   }
 }
-
 function renderAllVolcanicAshLayers() {
   clearVolcanicAshLayers();
 
