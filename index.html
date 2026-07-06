@@ -1115,43 +1115,51 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
 
   const polygon = L.polygon(latLngs, getVolcanicLayerStyle(layer));
 
+  let popupPinned = false;
+
   polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer), {
     autoPan: false,
     closeButton: true,
     maxWidth: 300
   });
 
-  // 원래 동작 복구: 마우스 오버만 해도 화산재 popup 표시
+  // 마우스 오버: 임시 popup 표시
   polygon.on("mouseover", function (e) {
     if (e && e.originalEvent) {
       L.DomEvent.stopPropagation(e.originalEvent);
     }
 
-    polygon.openPopup(e.latlng);
-  });
-
-  polygon.on("mousemove", function (e) {
-    if (e && e.originalEvent) {
-      L.DomEvent.stopPropagation(e.originalEvent);
+    if (!popupPinned) {
+      polygon.openPopup(e.latlng);
     }
   });
 
+  // 마우스 아웃: 고정 상태가 아닐 때만 닫기
   polygon.on("mouseout", function () {
-    polygon.closePopup();
+    if (!popupPinned) {
+      polygon.closePopup();
+    }
   });
 
-  // 클릭 시에도 화산재 도형이 FIR/ARTCC보다 우선되고, 왼쪽 Info 패널 표시
+  // 클릭: popup 고정
   polygon.on("click", function (e) {
     if (e && e.originalEvent) {
       L.DomEvent.stopPropagation(e.originalEvent);
     }
 
+    popupPinned = true;
     polygon.openPopup(e.latlng);
+
     showDccInfoAdvisorySummary(advisory.advn, true);
 
     if (window.innerWidth <= 767) {
       showMobilePanel("main");
     }
+  });
+
+  // popup 닫기 버튼 누르면 고정 해제
+  polygon.on("popupclose", function () {
+    popupPinned = false;
   });
 
   polygon.addTo(volcanicAshLayerGroup);
