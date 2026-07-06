@@ -626,7 +626,15 @@ input {
     font-size: 9px;
   }
 }
-    
+
+/* Volcanic ash polygon hover/click support */
+.leaflet-volcanicAshPane-pane,
+.leaflet-volcanicAshPane-pane svg,
+.leaflet-volcanicAshPane-pane path,
+.volcanic-ash-polygon {
+  pointer-events: auto !important;
+}
+
   </style>
 </head>
 
@@ -743,6 +751,16 @@ const map = L.map("map", {
   worldCopyJump: false
 }).setView([39.5, -98.5], window.innerWidth <= 767 ? 3 : 4);
 
+// 화산재 polygon은 FIR/ARTCC보다 위에서 mouseover/click을 우선 처리
+map.createPane("volcanicAshPane");
+map.getPane("volcanicAshPane").style.zIndex = 455;
+map.getPane("volcanicAshPane").style.pointerEvents = "auto";
+
+const volcanicAshRenderer = L.svg({
+  pane: "volcanicAshPane",
+  padding: 0.5
+});
+
  let volcanicAshLayerGroup = L.layerGroup().addTo(map);
 
 function clearVolcanicAshLayers() {
@@ -764,11 +782,6 @@ map.getPane("baseballTfrPane").style.zIndex = 435;
 
 map.createPane("routePane");
 map.getPane("routePane").style.zIndex = 450;
-
-// 화산재 도형 클릭 우선: FIR/ARTCC보다 위에 두고 polygon 클릭을 받음
-map.createPane("volcanicAshPane");
-map.getPane("volcanicAshPane").style.zIndex = 455;
-map.getPane("volcanicAshPane").style.pointerEvents = "auto";
     const artccRenderer = L.svg({ pane: "artccPane" });
 const tfrRenderer = L.canvas({
   pane: "tfrPane",
@@ -1028,13 +1041,15 @@ function getVolcanicLayerStyle(layer) {
 
   return {
     pane: "volcanicAshPane",
+    renderer: volcanicAshRenderer,
     color,
     weight: 2,
     opacity: 0.95,
     fillColor: color,
     fillOpacity,
     interactive: true,
-    bubblingMouseEvents: false
+    bubblingMouseEvents: false,
+    className: "volcanic-ash-polygon"
   };
 }
 
@@ -1054,11 +1069,11 @@ function makeVolcanicLayerLatLngs(layer) {
 
   if (coords.length < 3) return [];
 
-  // 캄차카/베링해 등 ±180도 경도선 근처 화산재 polygon이
-  // 지도 오른쪽 world copy로 밀리거나 길게 찢어지지 않도록
-  // 앱의 북미/태평양 기준 경도(-100)로 unwrap 처리
+  // 캄차카/베링해 화산재가 오른쪽 world copy로 밀리지 않도록
+  // 앱의 북미/태평양 기준 경도(-100) 근처로 unwrap 처리
   return unwrapCoordSequence(coords, ROUTE_REFERENCE_LON);
 }
+
 function buildVolcanicPopupHtml(advisory, ash, layer) {
   const baseTimeLabel = ash.estVaDtg
     ? "EST VA DTG"
@@ -1098,22 +1113,42 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
   const latLngs = makeVolcanicLayerLatLngs(layer);
   if (latLngs.length < 3) return;
 
-  // 화산재 도형 클릭 우선: FIR/ARTCC보다 위 pane에서 클릭 처리
   const polygon = L.polygon(latLngs, getVolcanicLayerStyle(layer));
 
-  polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer));
+  polygon.bindPopup(buildVolcanicPopupHtml(advisory, ash, layer), {
+    autoPan: false,
+    closeButton: true,
+    maxWidth: 300
+  });
 
+  // 원래 동작 복구: 마우스 오버만 해도 화산재 popup 표시
+  polygon.on("mouseover", function (e) {
+    if (e && e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+    }
+
+    polygon.openPopup(e.latlng);
+  });
+
+  polygon.on("mousemove", function (e) {
+    if (e && e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+    }
+  });
+
+  polygon.on("mouseout", function () {
+    polygon.closePopup();
+  });
+
+  // 클릭 시에도 화산재 도형이 FIR/ARTCC보다 우선되고, 왼쪽 Info 패널 표시
   polygon.on("click", function (e) {
     if (e && e.originalEvent) {
       L.DomEvent.stopPropagation(e.originalEvent);
     }
 
     polygon.openPopup(e.latlng);
-
-    // 도형 클릭 시: 왼쪽 Info 창에 해당 Advisory 요약 표시, zoom은 유지
     showDccInfoAdvisorySummary(advisory.advn, true);
 
-    // 모바일이면 Info 패널 열기
     if (window.innerWidth <= 767) {
       showMobilePanel("main");
     }
@@ -1130,6 +1165,7 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
     boundsList.push(b);
   }
 }
+
 function renderAllVolcanicAshLayers() {
   clearVolcanicAshLayers();
 
