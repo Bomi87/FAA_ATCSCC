@@ -2999,8 +2999,24 @@ async function toggleTfrLayer() {
 }
     
 
-    function selectArtcc(layer, feature) {
+    function waitForAllAdvisoryLoading_(timeoutMs = 15000) {
+      return new Promise(function (resolve) {
+        const startedAt = Date.now();
+
+        const timer = setInterval(function () {
+          const timedOut = Date.now() - startedAt >= timeoutMs;
+
+          if (!isAllAdvisoryLoading || timedOut) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 150);
+      });
+    }
+
+    async function selectArtcc(layer, feature) {
       const p = feature.properties || {};
+
       const ident =
         normalizeMapFacilityCode(p.displayIdent) ||
         normalizeMapFacilityCode(p.ident) ||
@@ -3008,7 +3024,9 @@ async function toggleTfrLayer() {
         normalizeMapFacilityCode(p.icaoFir) ||
         normalizeMapFacilityCode(p.fullIdent) ||
         String(p.ident || p.facility || p.id || "").toUpperCase();
+
       const name = p.name || p.fullIdent || p.icaoFir || ident;
+      const advisoryBox = document.getElementById("advisoryBox");
 
       selectedLayer = layer;
       selectedIdent = ident;
@@ -3018,40 +3036,85 @@ async function toggleTfrLayer() {
 
       updateArtccAdvisoryColors();
 
-      layer.setStyle(getArtccStyle("selected"));
- 
+      if (layer && layer.setStyle) {
+        layer.setStyle(getArtccStyle("selected"));
+      }
 
-    updateFaaLink();
-    if (tfrVisible) {
-  if (map.hasLayer(tfrLayer)) {
-    tfrLayer.bringToFront();
-  }
+      updateFaaLink();
 
-  if (map.hasLayer(baseballTfrLayer)) {
-    baseballTfrLayer.bringToFront();
-  }
+      if (tfrVisible) {
+        if (map.hasLayer(tfrLayer)) {
+          tfrLayer.bringToFront();
+        }
 
-  if (map.hasLayer(routeLayer)) {
-    routeLayer.bringToFront();
-  }
+        if (map.hasLayer(baseballTfrLayer)) {
+          baseballTfrLayer.bringToFront();
+        }
 
+        if (map.hasLayer(routeLayer)) {
+          routeLayer.bringToFront();
+        }
+      }
 
-}  
+      if (window.innerWidth <= 767) {
+        showMobilePanel("main");
+      }
 
-if (isAdvisoryCacheValid()) {
-  renderAdvisoriesForFacilityFromCache(ident);
-} else {
-  document.getElementById("advisoryBox").innerHTML =
-    escapeHtml(ident) + " Advisory 최신 정보 새로고침 중...";
+      try {
+        // 현재 메모리 캐시에 해당 FIR Advisory가 있으면 즉시 표시
+        if (
+          isAdvisoryCacheValid() &&
+          facilityAdvisoryMap[ident] &&
+          facilityAdvisoryMap[ident].length > 0
+        ) {
+          renderAdvisoriesForFacilityFromCache(ident);
+          return;
+        }
 
-  loadAllAdvisoriesForDate().then(() => {
-    renderAdvisoriesForFacilityFromCache(ident);
-  });
-}
+        if (advisoryBox) {
+          advisoryBox.innerHTML =
+            escapeHtml(ident) + " Advisory 조회 중...";
+        }
 
-if (window.innerWidth <= 767) {
-  showMobilePanel("main");
-}
+        // 전체 Advisory가 이미 로딩 중이면 완료될 때까지 기다림
+        if (isAllAdvisoryLoading) {
+          await waitForAllAdvisoryLoading_(15000);
+        } else {
+          await loadAllAdvisoriesForDate();
+        }
+
+        // 전체 캐시에 해당 FIR 자료가 있으면 표시
+        if (
+          facilityAdvisoryMap[ident] &&
+          facilityAdvisoryMap[ident].length > 0
+        ) {
+          renderAdvisoriesForFacilityFromCache(ident);
+          return;
+        }
+
+        // 전체 캐시에 매핑되지 않으면 해당 FIR만 백엔드에서 직접 조회
+        await loadAdvisoriesForFacility(ident);
+
+      } catch (err) {
+        console.error("FIR Advisory display failed:", ident, err);
+
+        try {
+          await loadAdvisoriesForFacility(ident);
+        } catch (fallbackError) {
+          console.error("FIR fallback lookup failed:", fallbackError);
+
+          if (advisoryBox) {
+            advisoryBox.innerHTML =
+              escapeHtml(ident) +
+              " Advisory 조회 실패: " +
+              escapeHtml(
+                fallbackError.message ||
+                err.message ||
+                "Unknown error"
+              );
+          }
+        }
+      }
     }
     function clearSelectedArtcc() {
   selectedLayer = null;
@@ -3120,7 +3183,10 @@ if (window.innerWidth <= 767) {
       );
 
       layer.on("click", function (e) {
-        L.DomEvent.stopPropagation(e);
+        if (e && e.originalEvent) {
+          L.DomEvent.stopPropagation(e.originalEvent);
+        }
+
         selectArtcc(layer, feature);
       });
 
