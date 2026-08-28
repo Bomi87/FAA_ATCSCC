@@ -735,7 +735,9 @@ const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
 const BASEBALL_TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=baseballTfr&days=2";
 
-    const ROUTE_REFERENCE_LON = -100;
+    // 모든 지도 레이어가 동일한 world copy를 사용하도록 고정
+    const GLOBAL_WORLD_REFERENCE_LON = 130;
+    const ROUTE_REFERENCE_LON = GLOBAL_WORLD_REFERENCE_LON;
 
     const POPUP_OPTIONS = {
       maxWidth: 300,
@@ -749,7 +751,7 @@ const map = L.map("map", {
   zoomControl: false,
   preferCanvas: true,
   worldCopyJump: false
-}).setView([39.5, -98.5], window.innerWidth <= 767 ? 3 : 4);
+}).setView([39.5, 261.5], window.innerWidth <= 767 ? 3 : 4);
 
 // 화산재 polygon은 FIR/ARTCC보다 위에서 mouseover/click을 우선 처리
 map.createPane("volcanicAshPane");
@@ -1080,7 +1082,7 @@ function makeVolcanicLayerLatLngs(layer) {
   if (coords.length < 3) return [];
 
   // 캄차카/베링해 화산재가 오른쪽 world copy로 밀리지 않도록
-  // 앱의 북미/태평양 기준 경도(-100) 근처로 unwrap 처리
+  // 모든 레이어 공통 기준 경도(+130) world copy로 unwrap 처리
   return unwrapCoordSequence(coords, ROUTE_REFERENCE_LON);
 }
 
@@ -1382,12 +1384,11 @@ function zoomToVolcanicAdvisory(advisory) {
     return null;
   }
 
-  // 현재 지도 중심 경도 기준으로 가장 가까운 longitude copy 선택
-  const centerLon = map && map.getCenter
-    ? map.getCenter().lng
-    : safeLon;
-
-  const adjustedLon = shiftLonNearReference(safeLon, centerLon);
+  // 모든 레이어와 동일한 world copy 기준 사용
+  const adjustedLon = shiftLonNearReference(
+    safeLon,
+    GLOBAL_WORLD_REFERENCE_LON
+  );
 
   return [safeLat, adjustedLon];
 }
@@ -1458,7 +1459,7 @@ function toNdbLatLngNearReference(lat, lon, referenceLon) {
 
   const adjustedLon = Number.isFinite(safeReferenceLon)
     ? shiftLonNearReference(safeLon, safeReferenceLon)
-    : shiftLonNearReference(safeLon, map.getCenter().lng);
+    : shiftLonNearReference(safeLon, GLOBAL_WORLD_REFERENCE_LON);
 
   return [safeLat, adjustedLon];
 }
@@ -2300,7 +2301,13 @@ async function loadBaseballTfrLayer() {
 
   baseballTfrLayer.clearLayers();
 
-const geoLayer = L.geoJSON(data, {
+const normalizedBaseballTfrData =
+  normalizeGeoJsonLongitudesNearReference(
+    data,
+    GLOBAL_WORLD_REFERENCE_LON
+  );
+
+const geoLayer = L.geoJSON(normalizedBaseballTfrData, {
   pane: "tfrPane",
   renderer: tfrRenderer,
   style: getBaseballTfrStyle,
@@ -2852,7 +2859,13 @@ async function loadTfrLayer() {
 
   tfrLayer.clearLayers();
 
-const geoLayer = L.geoJSON(data, {
+const normalizedTfrData =
+  normalizeGeoJsonLongitudesNearReference(
+    data,
+    GLOBAL_WORLD_REFERENCE_LON
+  );
+
+const geoLayer = L.geoJSON(normalizedTfrData, {
   pane: "tfrPane",
   renderer: tfrRenderer,
   style: getTfrStyle,
@@ -3149,7 +3162,7 @@ async function toggleTfrLayer() {
 
   const data = await res.json();
 
-  // ARTCC GeoJSON 도형을 미국 기준 경도(-100) 근처로 보정
+  // ARTCC GeoJSON 도형을 모든 레이어 공통 world copy 기준으로 보정
   // 알래스카/태평양 근처 도형이 오른쪽 world copy에 떨어지는 문제 방지
   const normalizedData = normalizeGeoJsonLongitudesNearReference(
     data,
@@ -3219,7 +3232,7 @@ async function toggleTfrLayer() {
 
   geoLayer.addTo(artccGroup);
 
-  map.setView([39.5, -98.5], getDefaultMapZoom());
+  map.setView([39.5, 261.5], getDefaultMapZoom());
 }
 
     /*******************************************************
@@ -3778,7 +3791,7 @@ marker.bindTooltip(escapeHtml(name), {
           drawKMLPoint(f, aircraft, idx, pointFeatures.length);
         });
 
-        map.setView([39.5, -98.5], getDefaultMapZoom());
+        map.setView([39.5, 261.5], getDefaultMapZoom());
 
  
 
