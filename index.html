@@ -791,13 +791,13 @@ const baseballTfrRenderer = tfrRenderer;
     
     // CARTO 공개 타일의 API KEY REQUIRED 워터마크 방지를 위해
     // 키가 필요 없는 OpenStreetMap 기본 타일 사용
-    const streetMap = L.tileLayer(
-      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors"
-      }
-    ).addTo(map);
+  const streetMap = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+  {
+    maxZoom: 19,
+    attribution: "Tiles &copy; Esri"
+  }
+).addTo(map);
 
     const satelliteMap = L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
