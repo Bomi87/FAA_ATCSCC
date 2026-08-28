@@ -789,11 +789,13 @@ const tfrRenderer = L.canvas({
 });
 const baseballTfrRenderer = tfrRenderer;
     
+    // CARTO 공개 타일의 API KEY REQUIRED 워터마크 방지를 위해
+    // 키가 필요 없는 OpenStreetMap 기본 타일 사용
     const streetMap = L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
-        maxZoom: 12,
-        attribution: "&copy; OpenStreetMap &copy; CARTO"
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
       }
     ).addTo(map);
 
