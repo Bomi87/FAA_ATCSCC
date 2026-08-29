@@ -3982,7 +3982,10 @@ async function showNdbMarkerIfExistsByIcao(code, airport) {
     ? Number(airport.lon)
     : matchedMarker.getLatLng().lng;
 
-  const targetLatLng = [lat, lon];
+  // 검색 공항도 ARTCC / Route / NDB와 동일한 world copy에 표시
+  // 예: KEWR -74° -> 현재 지도 기준 약 286°로 보정
+  const targetLatLng =
+    toNdbLatLngNearReference(lat, lon, GLOBAL_WORLD_REFERENCE_LON) || [lat, lon];
 
   // 검색 결과에서는 geocode airport 좌표를 기준으로 강제 이동
   matchedMarker.setLatLng(targetLatLng);
@@ -4050,7 +4053,10 @@ async function zoomToAirportByIcao(icao) {
     airport.lat = lat;
     airport.lon = lon;
 
-    const airportLatLng = [lat, lon];
+    // 검색 공항 좌표를 다른 지도 레이어와 동일한 world copy로 맞춤
+    // 서경(-) 좌표가 왼쪽의 다른 world copy에 표시되는 현상 방지
+    const airportLatLng =
+      toNdbLatLngNearReference(lat, lon, GLOBAL_WORLD_REFERENCE_LON) || [lat, lon];
 
     map.setView(airportLatLng, 10, {
       animate: false
