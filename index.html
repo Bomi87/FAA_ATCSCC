@@ -1938,17 +1938,75 @@ function clearRightPanelSelections() {
   });
 }
 
+function highlightRightPanelForAdvisories(advisories) {
+  const list = Array.isArray(advisories) ? advisories : [];
+  const advnSet = new Set(
+    list
+      .map(a => normalizeAdvnText(a && a.advn))
+      .filter(Boolean)
+  );
+
+  clearRightPanelSelections();
+
+  if (!advnSet.size) return;
+
+  // Flow / Route / Info / Volcanic / Other rows
+  document.querySelectorAll("[data-advn]").forEach(el => {
+    const rowAdvn = normalizeAdvnText(el.getAttribute("data-advn"));
+    if (advnSet.has(rowAdvn)) {
+      el.classList.add("advisory-list-active");
+    }
+  });
+
+  // Affected Airports rows:
+  // 해당 공항에 연결된 Advisory 중 하나라도 관련 Advisory면 같이 음영.
+  document.querySelectorAll("[data-airport-code]").forEach(el => {
+    const ap = String(el.getAttribute("data-airport-code") || "").toUpperCase();
+    const airportMatches = airportAdvisoryMap[ap] || [];
+
+    const related = airportMatches.some(a =>
+      advnSet.has(normalizeAdvnText(a && a.advn))
+    );
+
+    if (related) {
+      el.classList.add("advisory-list-active");
+    }
+  });
+
+  // En Route Events rows:
+  // 연결된 Advisory가 관련 Advisory면 같이 음영.
+  document.querySelectorAll("[data-enroute-key]").forEach(el => {
+    const key = String(el.getAttribute("data-enroute-key") || "");
+    const evt = findEnrouteEventByKey(key);
+    if (!evt) return;
+
+    const matched = findAdvisoryForEnrouteEvent(evt);
+    if (
+      matched &&
+      advnSet.has(normalizeAdvnText(matched.advn))
+    ) {
+      el.classList.add("advisory-list-active");
+    }
+  });
+}
+
 function markEnrouteListSelection(evt) {
   const matched = findAdvisoryForEnrouteEvent(evt);
 
   if (matched && matched.advn != null) {
-    selectAdvisoryListRow(matched.advn);
+    highlightRightPanelForAdvisories([matched]);
+
+    // highlightRightPanelForAdvisories()가 En Route row도 연결관계로 칠하지만,
+    // 현재 클릭한 이벤트 자체는 확실히 유지.
+    selectEnrouteEventListRow(getEnrouteEventKey(evt));
     return;
   }
 
   const advn = getEnrouteEventAdvn(evt);
   if (advn) {
     selectAdvisoryListRow(advn);
+  } else {
+    selectEnrouteEventListRow(getEnrouteEventKey(evt));
   }
 }
 
@@ -3179,6 +3237,11 @@ box.innerHTML = `
   .slice()
   .sort((a, b) => Number(b.advn) - Number(a.advn));
 
+  // 선택된 ARTCC의 왼쪽 목록과 동일한 Advisory들을 오른쪽에서도 음영 표시.
+  if (selectedIdent && code === selectedIdent) {
+    highlightRightPanelForAdvisories(matches);
+  }
+
   if (!matches.length) {
     box.innerHTML = escapeHtml(code) + " 관련 Advisory 없음";
     return;
@@ -4230,6 +4293,12 @@ async function toggleTfrLayer() {
 
       selectedLayer = layer;
       selectedIdent = ident;
+
+      // 지도에서 ARTCC를 선택하면,
+      // 왼쪽에 표시되는 동일 Advisory들을 오른쪽 목록에서도 모두 음영 표시.
+      highlightRightPanelForAdvisories(
+        (facilityAdvisoryMap[ident] || []).slice()
+      );
 
       document.getElementById("selectedArtcc").textContent = ident || "-";
       document.getElementById("selectedName").textContent = name || "-";
