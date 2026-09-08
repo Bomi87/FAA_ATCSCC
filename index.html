@@ -168,9 +168,35 @@ html, body {
   padding-left: 6px;
 }
 
-.enroute-event-list-active {
+.advisory-list-active {
   background: #fef2f2 !important;
   box-shadow: inset 0 0 0 1px #fecaca;
+}
+
+.airport-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.artcc-impact-toggle {
+  border: 1px solid #fdba74;
+  border-radius: 7px;
+  padding: 3px 7px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.artcc-impact-toggle.off {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
 .enroute-event-hint {
@@ -896,6 +922,13 @@ let selectedEnrouteEventKey = "";
 let selectedEnrouteEventLayer = null;
 let enrouteEventsLoadedAt = 0;
 const ENROUTE_EVENTS_FRONT_CACHE_TTL_MS = 3 * 60 * 1000;
+
+// Right-list selection is independent from whether the advisory has map geometry.
+let selectedAdvisoryAdvn = "";
+
+// Controls only the orange ARTCC "has advisory" overlay.
+// Manually selected ARTCC highlighting remains available when this is OFF.
+let artccImpactVisible = true;
 
 let tfrVisible = false;
 let tfrLoaded = false;
@@ -1827,26 +1860,33 @@ function clearSelectedEnrouteEvent() {
 
   selectedEnrouteEventLayer = null;
   selectedEnrouteEventKey = "";
+}
 
-  document.querySelectorAll(".enroute-event-list-active").forEach(el => {
-    el.classList.remove("enroute-event-list-active");
+function selectAdvisoryListRow(advn) {
+  const normalized = normalizeAdvnText(advn);
+  selectedAdvisoryAdvn = normalized;
+
+  document.querySelectorAll("[data-advn]").forEach(el => {
+    const rowAdvn = normalizeAdvnText(el.getAttribute("data-advn"));
+    el.classList.toggle(
+      "advisory-list-active",
+      Boolean(normalized && rowAdvn === normalized)
+    );
   });
 }
 
 function markEnrouteListSelection(evt) {
+  const matched = findAdvisoryForEnrouteEvent(evt);
+
+  if (matched && matched.advn != null) {
+    selectAdvisoryListRow(matched.advn);
+    return;
+  }
+
   const advn = getEnrouteEventAdvn(evt);
-  const controls = collectEnrouteControlCandidates(evt);
-
-  document.querySelectorAll("[data-advn]").forEach(el => {
-    const rowAdvn = normalizeAdvnText(el.getAttribute("data-advn"));
-    const rowControl = String(el.getAttribute("data-control") || "").toUpperCase();
-
-    const match =
-      (advn && rowAdvn === advn) ||
-      (rowControl && controls.includes(rowControl));
-
-    el.classList.toggle("enroute-event-list-active", Boolean(match));
-  });
+  if (advn) {
+    selectAdvisoryListRow(advn);
+  }
 }
 
 function findEnrouteEventForAdvisory(a) {
@@ -2181,12 +2221,15 @@ function advisoryHasEnrouteGeometry(a) {
 }
 
 function handleAdvisoryListClick(advn) {
+  selectAdvisoryListRow(advn);
+
   const a = (allAdvisoriesCache || []).find(x =>
     normalizeAdvnText(x.advn) === normalizeAdvnText(advn)
   );
 
   if (!a) {
-    showDccInfoAdvisorySummary(advn);
+    clearSelectedEnrouteEvent();
+    showDccInfoAdvisorySummary(advn, true);
     return;
   }
 
@@ -2196,7 +2239,10 @@ function handleAdvisoryListClick(advn) {
     return;
   }
 
-  showDccInfoAdvisorySummary(advn);
+  // A non-map advisory should release any previously selected red geometry,
+  // while the newly clicked advisory row stays shaded.
+  clearSelectedEnrouteEvent();
+  showDccInfoAdvisorySummary(advn, true);
 }
 
 
@@ -2590,6 +2636,21 @@ function renderAllCategorizedAdvisoriesHtml() {
   ].map(renderAdvisoryCategorySection).join("");
 }
 
+function syncArtccImpactToggleButton() {
+  const btn = document.getElementById("artccImpactToggleBtn");
+  if (!btn) return;
+
+  btn.textContent = artccImpactVisible ? "ARTCC ON" : "ARTCC OFF";
+  btn.classList.toggle("off", !artccImpactVisible);
+  btn.setAttribute("aria-pressed", artccImpactVisible ? "true" : "false");
+}
+
+function toggleArtccImpactLayer() {
+  artccImpactVisible = !artccImpactVisible;
+  syncArtccImpactToggleButton();
+  updateArtccAdvisoryColors();
+}
+
     function updateArtccAdvisoryColors() {
       Object.keys(artccLayerIndex).forEach(code => {
         const layer = artccLayerIndex[code];
@@ -2600,12 +2661,18 @@ function renderAllCategorizedAdvisoriesHtml() {
           return;
         }
 
-        if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) {
+        if (
+          artccImpactVisible &&
+          facilityAdvisoryMap[code] &&
+          facilityAdvisoryMap[code].length > 0
+        ) {
           layer.setStyle(getArtccStyle("hasAdvisory"));
         } else {
           layer.setStyle(getArtccStyle("normal"));
         }
       });
+
+      syncArtccImpactToggleButton();
     }
 
 function renderDccInfoAdvisoryHtml() {
@@ -2732,8 +2799,15 @@ function getPhlcDisplayName(ap, advisoryList) {
   // The exhaustive category list below is the no-drop master list.
   const airportHtml = airports.length
     ? `
-      <div style="margin-bottom:6px;">
+      <div class="airport-section-title-row">
         <span class="section-header section-header-airports">Affected Airports</span>
+        <button id="artccImpactToggleBtn"
+                class="artcc-impact-toggle"
+                type="button"
+                aria-pressed="true"
+                onclick="event.stopPropagation(); toggleArtccImpactLayer(); return false;">
+          ARTCC ON
+        </button>
       </div>
       ${airports.map(ap => {
         const list = (airportAdvisoryMap[ap] || [])
@@ -2768,13 +2842,32 @@ function getPhlcDisplayName(ap, advisoryList) {
         `;
       }).join("")}
     `
-    : "<div style='color:#6b7280; margin-bottom:8px;'>영향 공항 없음</div>";
+    : `
+      <div class="airport-section-title-row">
+        <span style="color:#6b7280;">영향 공항 없음</span>
+        <button id="artccImpactToggleBtn"
+                class="artcc-impact-toggle"
+                type="button"
+                aria-pressed="true"
+                onclick="event.stopPropagation(); toggleArtccImpactLayer(); return false;">
+          ARTCC ON
+        </button>
+      </div>
+    `;
 
   box.innerHTML = airportHtml + categorizedHtml;
+
+  syncArtccImpactToggleButton();
+
+  if (selectedAdvisoryAdvn) {
+    selectAdvisoryListRow(selectedAdvisoryAdvn);
+  }
 }
 
 function showDccInfoAdvisorySummary(advn, skipZoom) {
   const box = document.getElementById("advisoryBox");
+
+  selectAdvisoryListRow(advn);
 
   const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
 
