@@ -3095,6 +3095,8 @@ const sectionClass = categoryInfo.className || (
 }
     
     function showAirportAdvisories(airportCode) {
+      clearSelectedEnrouteEvent();
+
       selectedAdvisoryAdvn = "";
       document.querySelectorAll("[data-advn]").forEach(el => {
         el.classList.remove("advisory-list-active");
@@ -4191,6 +4193,8 @@ async function toggleTfrLayer() {
     }
 
     async function selectArtcc(layer, feature) {
+      clearSelectedEnrouteEvent();
+
       const p = feature.properties || {};
 
       const ident =
@@ -5356,8 +5360,25 @@ button.addEventListener("click", async function () {
 
     
 map.on("click", function () {
+  // 지도 빈 곳 클릭 시 En Route Event 선택 음영/강조 해제
+  clearSelectedEnrouteEvent();
+
   if (selectedIdent) {
     clearSelectedArtcc();
+  }
+});
+
+document.addEventListener("click", function (e) {
+  const target = e && e.target;
+
+  if (target && target.closest) {
+    // En Route Event 자체 또는 Advisory row는 각 전용 handler에서 선택 상태를 처리.
+    if (target.closest("[data-enroute-key]")) return;
+    if (target.closest("[data-advn]")) return;
+  }
+
+  if (selectedEnrouteEventKey) {
+    clearSelectedEnrouteEvent();
   }
 });
 
