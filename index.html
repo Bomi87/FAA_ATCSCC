@@ -205,6 +205,20 @@ html, body {
   font-size: 10px;
 }
 
+.section-header-enroute {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.enroute-polygon-icon {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.enroute-event-row-title {
+  color: #374151;
+}
+
 .enroute-event-detail-title {
   color: #b91c1c;
   font-weight: 800;
@@ -2642,6 +2656,86 @@ function renderAdvisoryCategorySection(categoryKey) {
   `;
 }
 
+
+function renderEnrouteEventsHtml() {
+  const events = (enrouteEventsCache || []).slice();
+
+  if (!events.length) return "";
+
+  return `
+    <div style="margin-top:10px; padding-top:8px; border-top:2px solid #fecaca;">
+      <div style="margin-bottom:6px;">
+        <span class="section-header section-header-enroute">
+          <span class="enroute-polygon-icon">⬟</span> En Route Events
+        </span>
+      </div>
+
+      ${events.map((evt, index) => {
+        const matched = findAdvisoryForEnrouteEvent(evt);
+        const hasMap = hasDrawableEnrouteGeometry(evt);
+        const details = getEnrouteEventDetails(evt);
+        const eventKey = getEnrouteEventKey(evt, index);
+
+        const primaryTitle = matched
+          ? `ADVZY ${escapeHtml(matched.advn)}`
+          : escapeHtml(details.name || "En Route Event");
+
+        const secondaryTitle = matched
+          ? escapeHtml(matched.title || details.type || "En Route Event")
+          : escapeHtml(details.type || "En Route Event");
+
+        const controlText = matched && matched.controlElement
+          ? `Control: ${escapeHtml(matched.controlElement)}`
+          : details.name
+            ? `Control: ${escapeHtml(details.name)}`
+            : "";
+
+        return `
+          <div class="airport-item ${hasMap ? "enroute-event-list-match" : ""}"
+               data-enroute-key="${escapeHtml(eventKey)}"
+               onclick="event.stopPropagation(); handleEnrouteEventListClick('${escapeHtml(eventKey)}'); return false;">
+            <b>${primaryTitle} <span class="enroute-polygon-icon">⬟</span></b>
+            ${hasMap ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
+            <span class="enroute-event-row-title">${secondaryTitle}</span><br>
+            ${controlText
+              ? `<span style="color:#b91c1c; font-weight:400;">${controlText}</span>`
+              : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function findEnrouteEventByKey(key) {
+  const target = String(key || "");
+  return (enrouteEventsCache || []).find((evt, index) =>
+    getEnrouteEventKey(evt, index) === target
+  ) || null;
+}
+
+function handleEnrouteEventListClick(key) {
+  const evt = findEnrouteEventByKey(key);
+  if (!evt) return;
+
+  const matched = findAdvisoryForEnrouteEvent(evt);
+
+  // Keep existing selection behavior in sync when the event has a matched Advisory.
+  if (matched && matched.advn != null) {
+    selectedAirportCode = "";
+    document.querySelectorAll("[data-airport-code]").forEach(el => {
+      el.classList.remove("advisory-list-active");
+    });
+    selectAdvisoryListRow(matched.advn);
+  }
+
+  if (hasDrawableEnrouteGeometry(evt)) {
+    selectEnrouteEvent(evt, { zoom: true, showDetails: true });
+  } else {
+    renderEnrouteEventDetails(evt, matched);
+  }
+}
+
 function renderAllCategorizedAdvisoriesHtml() {
   // Priority/order shown in the right panel.
   // Airport-specific advisories remain represented by Affected Airports and are not
@@ -2807,9 +2901,10 @@ function getPhlcDisplayName(ap, advisoryList) {
   const box = document.getElementById("airportRestrictionList");
 
   const airports = Object.keys(airportAdvisoryMap).sort();
+  const enrouteHtml = renderEnrouteEventsHtml();
   const categorizedHtml = renderAllCategorizedAdvisoriesHtml();
 
-  if (!airports.length && !categorizedHtml) {
+  if (!airports.length && !enrouteHtml && !categorizedHtml) {
     box.innerHTML = "영향 공항 / Advisory 없음";
     return;
   }
@@ -2876,7 +2971,7 @@ function getPhlcDisplayName(ap, advisoryList) {
       </div>
     `;
 
-  box.innerHTML = airportHtml + categorizedHtml;
+  box.innerHTML = airportHtml + enrouteHtml + categorizedHtml;
 
   syncArtccImpactToggleButton();
 
