@@ -1938,7 +1938,57 @@ function clearRightPanelSelections() {
   });
 }
 
-function highlightRightPanelForAdvisories(advisories) {
+function scrollRightPanelToElement(el) {
+  if (!el) return;
+
+  const panel = document.querySelector(".right-panel");
+  if (!panel) return;
+
+  try {
+    const panelRect = panel.getBoundingClientRect();
+    const rowRect = el.getBoundingClientRect();
+
+    const targetTop =
+      panel.scrollTop +
+      (rowRect.top - panelRect.top) -
+      (panel.clientHeight / 2) +
+      (rowRect.height / 2);
+
+    panel.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: "smooth"
+    });
+  } catch (e) {
+    try {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_) {}
+  }
+}
+
+function findFirstRightPanelAdvisoryRow(advisories) {
+  const list = Array.isArray(advisories) ? advisories : [];
+  const advnSet = new Set(
+    list
+      .map(a => normalizeAdvnText(a && a.advn))
+      .filter(Boolean)
+  );
+
+  if (!advnSet.size) return null;
+
+  const rows = Array.from(document.querySelectorAll("[data-advn]"));
+  return rows.find(el =>
+    advnSet.has(
+      normalizeAdvnText(el.getAttribute("data-advn"))
+    )
+  ) || null;
+}
+
+function highlightRightPanelForAdvisories(advisories, options) {
+  const opts = Object.assign({
+    scroll: false,
+    preferredAdvn: ""
+  }, options || {});
+
   const list = Array.isArray(advisories) ? advisories : [];
   const advnSet = new Set(
     list
@@ -1948,18 +1998,20 @@ function highlightRightPanelForAdvisories(advisories) {
 
   clearRightPanelSelections();
 
-  if (!advnSet.size) return;
+  if (!advnSet.size) return null;
+
+  const highlightedAdvRows = [];
 
   // Flow / Route / Info / Volcanic / Other rows
   document.querySelectorAll("[data-advn]").forEach(el => {
     const rowAdvn = normalizeAdvnText(el.getAttribute("data-advn"));
     if (advnSet.has(rowAdvn)) {
       el.classList.add("advisory-list-active");
+      highlightedAdvRows.push(el);
     }
   });
 
-  // Affected Airports rows:
-  // 해당 공항에 연결된 Advisory 중 하나라도 관련 Advisory면 같이 음영.
+  // Affected Airports rows
   document.querySelectorAll("[data-airport-code]").forEach(el => {
     const ap = String(el.getAttribute("data-airport-code") || "").toUpperCase();
     const airportMatches = airportAdvisoryMap[ap] || [];
@@ -1973,8 +2025,7 @@ function highlightRightPanelForAdvisories(advisories) {
     }
   });
 
-  // En Route Events rows:
-  // 연결된 Advisory가 관련 Advisory면 같이 음영.
+  // En Route Events rows
   document.querySelectorAll("[data-enroute-key]").forEach(el => {
     const key = String(el.getAttribute("data-enroute-key") || "");
     const evt = findEnrouteEventByKey(key);
@@ -1988,25 +2039,72 @@ function highlightRightPanelForAdvisories(advisories) {
       el.classList.add("advisory-list-active");
     }
   });
+
+  let preferredRow = null;
+  const preferredAdvn = normalizeAdvnText(opts.preferredAdvn);
+
+  if (preferredAdvn) {
+    preferredRow = highlightedAdvRows.find(el =>
+      normalizeAdvnText(el.getAttribute("data-advn")) === preferredAdvn
+    ) || null;
+  }
+
+  if (!preferredRow) {
+    preferredRow = highlightedAdvRows[0] || null;
+  }
+
+  if (opts.scroll && preferredRow) {
+    setTimeout(function () {
+      scrollRightPanelToElement(preferredRow);
+    }, 30);
+  }
+
+  return preferredRow;
 }
 
-function markEnrouteListSelection(evt) {
+function markEnrouteListSelection(evt, options) {
+  const opts = Object.assign({
+    eventKey: "",
+    scroll: false
+  }, options || {});
+
+  const exactEventKey =
+    String(opts.eventKey || "") ||
+    getEnrouteEventKey(evt);
+
   const matched = findAdvisoryForEnrouteEvent(evt);
 
   if (matched && matched.advn != null) {
-    highlightRightPanelForAdvisories([matched]);
+    highlightRightPanelForAdvisories(
+      [matched],
+      {
+        scroll: opts.scroll,
+        preferredAdvn: matched.advn
+      }
+    );
 
-    // highlightRightPanelForAdvisories()가 En Route row도 연결관계로 칠하지만,
-    // 현재 클릭한 이벤트 자체는 확실히 유지.
-    selectEnrouteEventListRow(getEnrouteEventKey(evt));
+    // 현재 클릭한 En Route Event 행은 exact key로 확실히 음영 유지.
+    selectEnrouteEventListRow(exactEventKey);
     return;
   }
 
+  // Advisory 매칭이 없어도 현재 En Route Event 행은 반드시 음영.
+  clearRightPanelSelections();
+  selectEnrouteEventListRow(exactEventKey);
+
   const advn = getEnrouteEventAdvn(evt);
   if (advn) {
-    selectAdvisoryListRow(advn);
-  } else {
-    selectEnrouteEventListRow(getEnrouteEventKey(evt));
+    const row = document.querySelector(
+      '[data-advn="' + CSS.escape(String(advn)) + '"]'
+    );
+    if (row) {
+      row.classList.add("advisory-list-active");
+      if (opts.scroll) {
+        setTimeout(function () {
+          scrollRightPanelToElement(row);
+        }, 30);
+      }
+    }
   }
 }
 
@@ -2176,10 +2274,15 @@ function selectEnrouteEvent(evt, options) {
 
   const opts = Object.assign({
     zoom: true,
-    showDetails: true
+    showDetails: true,
+    eventKey: "",
+    scrollRight: false
   }, options || {});
 
-  const key = getEnrouteEventKey(evt);
+  const key =
+    String(opts.eventKey || "") ||
+    getEnrouteEventKey(evt);
+
   const layer = enrouteEventLayerByKey[key];
 
   if (!layer) return false;
@@ -2198,7 +2301,10 @@ function selectEnrouteEvent(evt, options) {
   }
 
   selectEnrouteEventListRow(key);
-  markEnrouteListSelection(evt);
+  markEnrouteListSelection(evt, {
+    eventKey: key,
+    scroll: opts.scrollRight
+  });
 
   if (opts.zoom) {
     try {
@@ -2289,7 +2395,12 @@ function renderEnrouteEventLayers() {
       if (e && e.originalEvent) {
         L.DomEvent.stopPropagation(e.originalEvent);
       }
-      selectEnrouteEvent(evt, { zoom: false, showDetails: true });
+      selectEnrouteEvent(evt, {
+        zoom: false,
+        showDetails: true,
+        eventKey: key,
+        scrollRight: true
+      });
     });
 
     enrouteEventLayerByKey[key] = layer;
@@ -2846,7 +2957,12 @@ function handleEnrouteEventListClick(key) {
   }
 
   if (hasDrawableEnrouteGeometry(evt)) {
-    selectEnrouteEvent(evt, { zoom: true, showDetails: true });
+    selectEnrouteEvent(evt, {
+      zoom: true,
+      showDetails: true,
+      eventKey: key,
+      scrollRight: false
+    });
   } else {
     renderEnrouteEventDetails(evt, matched);
   }
@@ -3239,7 +3355,10 @@ box.innerHTML = `
 
   // 선택된 ARTCC의 왼쪽 목록과 동일한 Advisory들을 오른쪽에서도 음영 표시.
   if (selectedIdent && code === selectedIdent) {
-    highlightRightPanelForAdvisories(matches);
+    highlightRightPanelForAdvisories(
+      matches,
+      { scroll: true }
+    );
   }
 
   if (!matches.length) {
@@ -4297,7 +4416,8 @@ async function toggleTfrLayer() {
       // 지도에서 ARTCC를 선택하면,
       // 왼쪽에 표시되는 동일 Advisory들을 오른쪽 목록에서도 모두 음영 표시.
       highlightRightPanelForAdvisories(
-        (facilityAdvisoryMap[ident] || []).slice()
+        (facilityAdvisoryMap[ident] || []).slice(),
+        { scroll: true }
       );
 
       document.getElementById("selectedArtcc").textContent = ident || "-";
