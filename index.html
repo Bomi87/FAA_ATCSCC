@@ -881,7 +881,9 @@ map.createPane("baseballTfrPane");
 map.getPane("baseballTfrPane").style.zIndex = 435;
 
 map.createPane("enrouteEventPane");
-map.getPane("enrouteEventPane").style.zIndex = 448;
+// En Route Event polygon/line/circle must stay above ARTCC and route overlays
+// so its geometry remains directly clickable even inside an ARTCC polygon.
+map.getPane("enrouteEventPane").style.zIndex = 470;
 map.getPane("enrouteEventPane").style.pointerEvents = "auto";
 
 map.createPane("routePane");
@@ -5359,8 +5361,24 @@ button.addEventListener("click", async function () {
 
 
     
+let suppressEnrouteClearUntil = 0;
+
+// 지도 drag/pan 동작은 "빈 곳 클릭"으로 취급하지 않는다.
+// 모바일에서 길게 누른 뒤 밀거나, PC에서 pan한 직후 발생할 수 있는 click을 잠시 무시.
+map.on("dragstart", function () {
+  suppressEnrouteClearUntil = Date.now() + 1000;
+});
+
+map.on("dragend", function () {
+  suppressEnrouteClearUntil = Date.now() + 350;
+});
+
 map.on("click", function () {
-  // 지도 빈 곳 클릭 시 En Route Event 선택 음영/강조 해제
+  if (Date.now() < suppressEnrouteClearUntil) {
+    return;
+  }
+
+  // 실제 빈 곳 단순 클릭/탭일 때만 En Route Event 선택 해제
   clearSelectedEnrouteEvent();
 
   if (selectedIdent) {
@@ -5369,6 +5387,9 @@ map.on("click", function () {
 });
 
 document.addEventListener("click", function (e) {
+  // 지도 drag/pan 직후 발생하는 click은 선택 해제로 처리하지 않음.
+  if (Date.now() < suppressEnrouteClearUntil) return;
+
   const target = e && e.target;
 
   if (target && target.closest) {
