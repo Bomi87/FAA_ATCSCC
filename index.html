@@ -925,6 +925,7 @@ const ENROUTE_EVENTS_FRONT_CACHE_TTL_MS = 3 * 60 * 1000;
 
 // Right-list selection is independent from whether the advisory has map geometry.
 let selectedAdvisoryAdvn = "";
+let selectedAirportCode = "";
 
 // Controls only the orange ARTCC "has advisory" overlay.
 // Manually selected ARTCC highlighting remains available when this is OFF.
@@ -1875,6 +1876,19 @@ function selectAdvisoryListRow(advn) {
   });
 }
 
+function selectAirportListRow(ap) {
+  const code = String(ap || "").toUpperCase().trim();
+  selectedAirportCode = code;
+
+  document.querySelectorAll("[data-airport-code]").forEach(el => {
+    const rowCode = String(el.getAttribute("data-airport-code") || "").toUpperCase();
+    el.classList.toggle(
+      "advisory-list-active",
+      Boolean(code && rowCode === code)
+    );
+  });
+}
+
 function markEnrouteListSelection(evt) {
   const matched = findAdvisoryForEnrouteEvent(evt);
 
@@ -2221,6 +2235,11 @@ function advisoryHasEnrouteGeometry(a) {
 }
 
 function handleAdvisoryListClick(advn) {
+  selectedAirportCode = "";
+  document.querySelectorAll("[data-airport-code]").forEach(el => {
+    el.classList.remove("advisory-list-active");
+  });
+
   selectAdvisoryListRow(advn);
 
   const a = (allAdvisoriesCache || []).find(x =>
@@ -2835,7 +2854,9 @@ function getPhlcDisplayName(ap, advisoryList) {
         const displayAp = getPhlcDisplayName(ap, list);
 
         return `
-          <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
+          <div class="airport-item"
+               data-airport-code="${escapeHtml(ap)}"
+               onclick="selectAirportListRow('${escapeHtml(ap)}'); showAirportAdvisories('${escapeHtml(ap)}')">
             <b>${escapeHtml(displayAp)}</b><br>
             <span style="color:#6b7280;">${advNums}</span>
           </div>
@@ -2861,6 +2882,8 @@ function getPhlcDisplayName(ap, advisoryList) {
 
   if (selectedAdvisoryAdvn) {
     selectAdvisoryListRow(selectedAdvisoryAdvn);
+  } else if (selectedAirportCode) {
+    selectAirportListRow(selectedAirportCode);
   }
 }
 
@@ -2938,7 +2961,14 @@ const sectionClass = categoryInfo.className || (
 }
     
     function showAirportAdvisories(airportCode) {
+      selectedAdvisoryAdvn = "";
+      document.querySelectorAll("[data-advn]").forEach(el => {
+        el.classList.remove("advisory-list-active");
+      });
+
       const ap = String(airportCode || "").toUpperCase();
+      selectAirportListRow(ap);
+
       const box = document.getElementById("advisoryBox");
 
      const matches = (airportAdvisoryMap[ap] || [])
