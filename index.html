@@ -1875,6 +1875,10 @@ function clearSelectedEnrouteEvent() {
 
   selectedEnrouteEventLayer = null;
   selectedEnrouteEventKey = "";
+
+  document.querySelectorAll("[data-enroute-key]").forEach(el => {
+    el.classList.remove("advisory-list-active");
+  });
 }
 
 function selectAdvisoryListRow(advn) {
@@ -1899,6 +1903,18 @@ function selectAirportListRow(ap) {
     el.classList.toggle(
       "advisory-list-active",
       Boolean(code && rowCode === code)
+    );
+  });
+}
+
+function selectEnrouteEventListRow(key) {
+  const targetKey = String(key || "");
+
+  document.querySelectorAll("[data-enroute-key]").forEach(el => {
+    const rowKey = String(el.getAttribute("data-enroute-key") || "");
+    el.classList.toggle(
+      "advisory-list-active",
+      Boolean(targetKey && rowKey === targetKey)
     );
   });
 }
@@ -2104,6 +2120,7 @@ function selectEnrouteEvent(evt, options) {
     layer.bringToFront();
   }
 
+  selectEnrouteEventListRow(key);
   markEnrouteListSelection(evt);
 
   if (opts.zoom) {
@@ -2699,18 +2716,15 @@ function renderEnrouteEventsHtml() {
         const details = getEnrouteEventDetails(evt);
         const eventKey = getEnrouteEventKey(evt, index);
 
-        const primaryTitle = matched
-          ? `ADVZY ${escapeHtml(matched.advn)}`
-          : escapeHtml(details.name || "En Route Event");
+        const primaryTitle =
+          escapeHtml(details.name || "En Route Event");
 
-        const secondaryTitle = matched
-          ? escapeHtml(matched.title || details.type || "En Route Event")
-          : escapeHtml(details.type || "En Route Event");
+        const secondaryTitle =
+          escapeHtml(details.type || "En Route Event");
 
-        const controlText = matched && matched.controlElement
-          ? `Control: ${escapeHtml(matched.controlElement)}`
-          : details.name
-            ? `Control: ${escapeHtml(details.name)}`
+        const linkedAdvisoryText =
+          matched && matched.advn != null
+            ? `Linked Advisory: ADVZY ${escapeHtml(matched.advn)}`
             : "";
 
         return `
@@ -2719,9 +2733,9 @@ function renderEnrouteEventsHtml() {
                onclick="event.stopPropagation(); handleEnrouteEventListClick('${escapeHtml(eventKey)}'); return false;">
             <b>${primaryTitle} <span class="enroute-polygon-icon">⬟</span></b>
             ${hasMap ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
-            <span class="enroute-event-row-title">${secondaryTitle}</span><br>
-            ${controlText
-              ? `<span style="color:#b91c1c; font-weight:400;">${controlText}</span>`
+            <span class="enroute-event-row-title">${secondaryTitle}</span>
+            ${linkedAdvisoryText
+              ? `<br><span style="color:#b91c1c; font-weight:400;">${linkedAdvisoryText}</span>`
               : ""}
           </div>
         `;
@@ -2740,6 +2754,8 @@ function findEnrouteEventByKey(key) {
 function handleEnrouteEventListClick(key) {
   const evt = findEnrouteEventByKey(key);
   if (!evt) return;
+
+  selectEnrouteEventListRow(key);
 
   const matched = findAdvisoryForEnrouteEvent(evt);
 
