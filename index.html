@@ -1921,6 +1921,23 @@ function selectEnrouteEventListRow(key) {
   });
 }
 
+function clearRightPanelSelections() {
+  selectedAdvisoryAdvn = "";
+  selectedAirportCode = "";
+
+  document.querySelectorAll("[data-advn]").forEach(el => {
+    el.classList.remove("advisory-list-active");
+  });
+
+  document.querySelectorAll("[data-airport-code]").forEach(el => {
+    el.classList.remove("advisory-list-active");
+  });
+
+  document.querySelectorAll("[data-enroute-key]").forEach(el => {
+    el.classList.remove("advisory-list-active");
+  });
+}
+
 function markEnrouteListSelection(evt) {
   const matched = findAdvisoryForEnrouteEvent(evt);
 
@@ -4196,6 +4213,7 @@ async function toggleTfrLayer() {
 
     async function selectArtcc(layer, feature) {
       clearSelectedEnrouteEvent();
+      clearRightPanelSelections();
 
       const p = feature.properties || {};
 
@@ -5378,8 +5396,9 @@ map.on("click", function () {
     return;
   }
 
-  // 실제 빈 곳 단순 클릭/탭일 때만 En Route Event 선택 해제
+  // 실제 빈 곳 단순 클릭/탭일 때만 모든 우측 선택 음영 + En Route 강조 해제
   clearSelectedEnrouteEvent();
+  clearRightPanelSelections();
 
   if (selectedIdent) {
     clearSelectedArtcc();
@@ -5393,13 +5412,19 @@ document.addEventListener("click", function (e) {
   const target = e && e.target;
 
   if (target && target.closest) {
-    // En Route Event 자체 또는 Advisory row는 각 전용 handler에서 선택 상태를 처리.
+    // 우측 선택 항목 자체는 각 전용 handler에서 선택 상태를 처리.
     if (target.closest("[data-enroute-key]")) return;
     if (target.closest("[data-advn]")) return;
+    if (target.closest("[data-airport-code]")) return;
   }
 
-  if (selectedEnrouteEventKey) {
+  if (
+    selectedEnrouteEventKey ||
+    selectedAdvisoryAdvn ||
+    selectedAirportCode
+  ) {
     clearSelectedEnrouteEvent();
+    clearRightPanelSelections();
   }
 });
 
