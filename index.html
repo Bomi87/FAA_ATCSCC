@@ -163,6 +163,27 @@ html, body {
   color: #6b7280;
 }
 
+.enroute-event-list-match {
+  border-left: 3px solid #dc2626;
+  padding-left: 6px;
+}
+
+.enroute-event-list-active {
+  background: #fef2f2 !important;
+  box-shadow: inset 0 0 0 1px #fecaca;
+}
+
+.enroute-event-hint {
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 10px;
+}
+
+.enroute-event-detail-title {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
     .row {
       margin-bottom: 8px;
     }
@@ -773,6 +794,7 @@ const FAA_APPS_SCRIPT_URL =
 const TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=tfr";
 
 const BASEBALL_TFR_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=baseballTfr&days=2";
+const ENROUTE_EVENTS_BACKEND_URL = FAA_APPS_SCRIPT_URL + "?mode=enrouteevents";
 
     // 모든 지도 레이어가 동일한 world copy를 사용하도록 고정
     const GLOBAL_WORLD_REFERENCE_LON = 130;
@@ -821,9 +843,18 @@ map.getPane("tfrPane").style.zIndex = 430;
 map.createPane("baseballTfrPane");
 map.getPane("baseballTfrPane").style.zIndex = 435;
 
+map.createPane("enrouteEventPane");
+map.getPane("enrouteEventPane").style.zIndex = 448;
+map.getPane("enrouteEventPane").style.pointerEvents = "auto";
+
 map.createPane("routePane");
 map.getPane("routePane").style.zIndex = 450;
     const artccRenderer = L.svg({ pane: "artccPane" });
+
+const enrouteEventRenderer = L.svg({
+  pane: "enrouteEventPane",
+  padding: 0.5
+});
 const tfrRenderer = L.canvas({
   pane: "tfrPane",
   padding: 0.5
@@ -858,8 +889,16 @@ const streetMap = L.layerGroup([
 const artccGroup = L.featureGroup().addTo(map);
 const tfrLayer = L.featureGroup();
 const baseballTfrLayer = L.featureGroup();
+const enrouteEventLayer = L.featureGroup().addTo(map);
 const routeLayer = L.featureGroup().addTo(map);
 const ndbLayer = L.featureGroup();
+
+let enrouteEventsCache = [];
+let enrouteEventLayerByKey = {};
+let selectedEnrouteEventKey = "";
+let selectedEnrouteEventLayer = null;
+let enrouteEventsLoadedAt = 0;
+const ENROUTE_EVENTS_FRONT_CACHE_TTL_MS = 3 * 60 * 1000;
 
 let tfrVisible = false;
 let tfrLoaded = false;
@@ -1573,6 +1612,577 @@ function updateFaaLink() {
 
   
 
+
+/*******************************************************
+ * FAA NAS Status - En Route Event Overlay
+ *******************************************************/
+function normalizeAdvnText(value) {
+  const s = String(value == null ? "" : value).trim();
+  if (!s) return "";
+  const n = Number(s);
+  if (Number.isFinite(n)) return String(n);
+  return s.replace(/^0+/, "") || "0";
+}
+
+function getEnrouteEventAdvn(evt) {
+  const url = String(evt && evt.advisoryUrl || "");
+  const m = url.match(/[?&]advn=(\d+)/i);
+  return m ? normalizeAdvnText(m[1]) : "";
+}
+
+function collectEnrouteControlCandidates(evt) {
+  const found = new Set();
+
+  function add(v) {
+    const s = String(v == null ? "" : v).trim().toUpperCase();
+    if (s) found.add(s);
+  }
+
+  if (!evt || typeof evt !== "object") return [];
+
+  add(evt.controlElement);
+  add(evt.afpName);
+
+  if (evt.airspaceFlowProgram) {
+    add(evt.airspaceFlowProgram.afpName);
+    add(evt.airspaceFlowProgram.controlElement);
+
+    const fadt = evt.airspaceFlowProgram.fuelFlowAdvisoryDelayTime;
+    if (fadt) add(fadt.controlElement);
+  }
+
+  // Generic shallow scan for future NAS Status event shapes.
+  Object.keys(evt).forEach(k => {
+    const v = evt[k];
+    if (!v || typeof v !== "object" || Array.isArray(v)) return;
+    add(v.controlElement);
+    add(v.afpName);
+    add(v.name);
+  });
+
+  return Array.from(found);
+}
+
+function getEnrouteEventName(evt) {
+  if (evt && evt.airspaceFlowProgram && evt.airspaceFlowProgram.afpName) {
+    return String(evt.airspaceFlowProgram.afpName);
+  }
+
+  const controls = collectEnrouteControlCandidates(evt);
+  return controls[0] || ("ENROUTE EVENT " + (getEnrouteEventAdvn(evt) || ""));
+}
+
+function getEnrouteEventProgramType(evt) {
+  if (evt && evt.airspaceFlowProgram) return "Airspace Flow Program";
+
+  const candidates = [
+    evt && evt.eventType,
+    evt && evt.type,
+    evt && evt.programType,
+    evt && evt.delayProgramType
+  ].filter(Boolean);
+
+  return candidates.length ? String(candidates[0]) : "En Route Event";
+}
+
+function getEnrouteEventKey(evt, index) {
+  if (evt && evt.airspaceFlowProgram && evt.airspaceFlowProgram.id) {
+    return "AFP:" + String(evt.airspaceFlowProgram.id);
+  }
+
+  if (evt && evt.id) return "ID:" + String(evt.id);
+
+  const advn = getEnrouteEventAdvn(evt);
+  if (advn) return "ADV:" + advn;
+
+  const name = getEnrouteEventName(evt);
+  return "NAME:" + String(name || index || "").toUpperCase();
+}
+
+function getEnrouteEventPointArray(container) {
+  if (!container) return [];
+
+  let raw = null;
+
+  if (container.points && Array.isArray(container.points.point)) {
+    raw = container.points.point;
+  } else if (Array.isArray(container.points)) {
+    raw = container.points;
+  } else if (Array.isArray(container.point)) {
+    raw = container.point;
+  }
+
+  if (!raw) return [];
+
+  return raw.map(p => {
+    const lat = Number(p && (p.latitude ?? p.lat));
+    const lon = Number(p && (p.longitude ?? p.lon ?? p.lng));
+    return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : null;
+  }).filter(Boolean);
+}
+
+function getEnrouteCircleDefinition(circle) {
+  if (!circle || typeof circle !== "object") return null;
+
+  const center =
+    circle.center ||
+    circle.centerPoint ||
+    circle.point ||
+    circle;
+
+  const lat = Number(center && (center.latitude ?? center.lat));
+  const lon = Number(center && (center.longitude ?? center.lon ?? center.lng));
+
+  let radiusNm = Number(
+    circle.radiusNm ??
+    circle.radiusNM ??
+    circle.radius ??
+    circle.nauticalMiles
+  );
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(radiusNm) || radiusNm <= 0) {
+    return null;
+  }
+
+  // Leaflet circle radius is meters. NAS Status operational radii are interpreted
+  // as nautical miles only when a numeric radius is supplied.
+  return {
+    center: [lat, lon],
+    radiusMeters: radiusNm * 1852
+  };
+}
+
+function hasDrawableEnrouteGeometry(evt) {
+  if (!evt) return false;
+
+  if (getEnrouteEventPointArray(evt.polygon).length >= 3) return true;
+  if (getEnrouteEventPointArray(evt.line).length >= 2) return true;
+  if (getEnrouteCircleDefinition(evt.circle)) return true;
+
+  return false;
+}
+
+function getNormalEnrouteStyle(kind) {
+  if (kind === "line") {
+    return {
+      color: "#dc2626",
+      weight: 3,
+      opacity: 0.9,
+      interactive: true
+    };
+  }
+
+  return {
+    color: "#dc2626",
+    weight: 2,
+    opacity: 0.95,
+    fillColor: "#ef4444",
+    fillOpacity: 0.16,
+    interactive: true
+  };
+}
+
+function getSelectedEnrouteStyle(kind) {
+  if (kind === "line") {
+    return {
+      color: "#991b1b",
+      weight: 6,
+      opacity: 1,
+      interactive: true
+    };
+  }
+
+  return {
+    color: "#991b1b",
+    weight: 5,
+    opacity: 1,
+    fillColor: "#dc2626",
+    fillOpacity: 0.32,
+    interactive: true
+  };
+}
+
+function clearSelectedEnrouteEvent() {
+  if (selectedEnrouteEventLayer && selectedEnrouteEventLayer.setStyle) {
+    const kind = selectedEnrouteEventLayer.__enrouteKind || "polygon";
+    selectedEnrouteEventLayer.setStyle(getNormalEnrouteStyle(kind));
+  }
+
+  selectedEnrouteEventLayer = null;
+  selectedEnrouteEventKey = "";
+
+  document.querySelectorAll(".enroute-event-list-active").forEach(el => {
+    el.classList.remove("enroute-event-list-active");
+  });
+}
+
+function markEnrouteListSelection(evt) {
+  const advn = getEnrouteEventAdvn(evt);
+  const controls = collectEnrouteControlCandidates(evt);
+
+  document.querySelectorAll("[data-advn]").forEach(el => {
+    const rowAdvn = normalizeAdvnText(el.getAttribute("data-advn"));
+    const rowControl = String(el.getAttribute("data-control") || "").toUpperCase();
+
+    const match =
+      (advn && rowAdvn === advn) ||
+      (rowControl && controls.includes(rowControl));
+
+    el.classList.toggle("enroute-event-list-active", Boolean(match));
+  });
+}
+
+function findEnrouteEventForAdvisory(a) {
+  if (!a) return null;
+
+  const advn = normalizeAdvnText(a.advn);
+  const control = String(a.controlElement || "").trim().toUpperCase();
+
+  // Strongest match: advisory number embedded in NAS Status advisoryUrl.
+  if (advn) {
+    const byAdvn = enrouteEventsCache.find(evt =>
+      hasDrawableEnrouteGeometry(evt) &&
+      getEnrouteEventAdvn(evt) === advn
+    );
+    if (byAdvn) return byAdvn;
+  }
+
+  // Fallback: CONTROL ELEMENT / AFP name.
+  if (control) {
+    const byControl = enrouteEventsCache.find(evt =>
+      hasDrawableEnrouteGeometry(evt) &&
+      collectEnrouteControlCandidates(evt).includes(control)
+    );
+    if (byControl) return byControl;
+  }
+
+  return null;
+}
+
+function findAdvisoryForEnrouteEvent(evt) {
+  const advn = getEnrouteEventAdvn(evt);
+
+  if (advn) {
+    const byAdvn = (allAdvisoriesCache || []).find(a =>
+      normalizeAdvnText(a.advn) === advn
+    );
+    if (byAdvn) return byAdvn;
+  }
+
+  const controls = collectEnrouteControlCandidates(evt);
+
+  return (allAdvisoriesCache || []).find(a => {
+    const c = String(a.controlElement || "").trim().toUpperCase();
+    return c && controls.includes(c);
+  }) || null;
+}
+
+function formatEnrouteUtc(value) {
+  if (!value) return "";
+
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return escapeHtml(String(value));
+
+  const pad = n => String(n).padStart(2, "0");
+
+  return (
+    d.getUTCFullYear() + "-" +
+    pad(d.getUTCMonth() + 1) + "-" +
+    pad(d.getUTCDate()) + " " +
+    pad(d.getUTCHours()) + ":" +
+    pad(d.getUTCMinutes()) + "Z"
+  );
+}
+
+function getEnrouteEventDetails(evt) {
+  const afp = evt && evt.airspaceFlowProgram ? evt.airspaceFlowProgram : null;
+
+  const lower =
+    afp && afp.lowerAltitude != null
+      ? String(afp.lowerAltitude)
+      : evt && evt.polygon && evt.polygon.floor != null
+        ? String(evt.polygon.floor)
+        : "";
+
+  const upper =
+    afp && afp.upperAltitude != null
+      ? String(afp.upperAltitude)
+      : evt && evt.polygon && evt.polygon.ceiling != null
+        ? String(evt.polygon.ceiling)
+        : "";
+
+  const avgDelay =
+    afp && Number.isFinite(Number(afp.avgDelay))
+      ? Math.round(Number(afp.avgDelay))
+      : "";
+
+  return {
+    name: getEnrouteEventName(evt),
+    type: getEnrouteEventProgramType(evt),
+    advn: getEnrouteEventAdvn(evt),
+    arrivesAny: String(evt && evt.arrivesAny || ""),
+    departsAny: String(evt && evt.departsAny || ""),
+    startTime: afp && afp.startTime ? afp.startTime : (evt && evt.startTime || ""),
+    endTime: afp && afp.endTime ? afp.endTime : (evt && evt.endTime || ""),
+    avgDelay: avgDelay,
+    impactingCondition:
+      afp && afp.impactingCondition
+        ? String(afp.impactingCondition)
+        : "",
+    lowerAltitude: lower,
+    upperAltitude: upper,
+    comments: String(evt && evt.comments || ""),
+    advisoryUrl: String(evt && evt.advisoryUrl || "")
+  };
+}
+
+function renderEnrouteEventDetails(evt, advisory) {
+  const box = document.getElementById("advisoryBox");
+  if (!box) return;
+
+  const d = getEnrouteEventDetails(evt);
+
+  const altitudeText =
+    d.lowerAltitude || d.upperAltitude
+      ? escapeHtml((d.lowerAltitude || "-") + " / " + (d.upperAltitude || "-"))
+      : "";
+
+  box.innerHTML = `
+    <div class="advisory-item">
+      <span class="section-header section-header-route">En Route Event</span>
+      <span style="color:#6b7280; font-size:11px; margin-left:6px;">(Times in UTC)</span>
+    </div>
+
+    <div class="advisory-item">
+      <div class="enroute-event-detail-title">${escapeHtml(d.name || "En Route Event")}</div>
+      <b>${escapeHtml(d.type || "En Route Event")}</b><br>
+      ${d.advn ? "ADVZY " + escapeHtml(d.advn) + "<br>" : ""}
+      ${d.arrivesAny ? "Affected Arrivals: <b>" + escapeHtml(d.arrivesAny) + "</b><br>" : ""}
+      ${d.departsAny ? "Affected Departures: <b>" + escapeHtml(d.departsAny) + "</b><br>" : ""}
+      ${d.avgDelay !== "" ? "Average Delay: <b>" + escapeHtml(String(d.avgDelay)) + " MIN</b><br>" : ""}
+      ${altitudeText ? "Altitude Floor/Ceiling: <b>" + altitudeText + "</b><br>" : ""}
+      ${d.startTime ? "Start: " + formatEnrouteUtc(d.startTime) + "<br>" : ""}
+      ${d.endTime ? "End: " + formatEnrouteUtc(d.endTime) + "<br>" : ""}
+      ${d.impactingCondition ? "Impacting Condition: " + escapeHtml(d.impactingCondition) + "<br>" : ""}
+      ${d.comments ? "<div style='margin-top:5px;'>Comments: " + escapeHtml(d.comments) + "</div>" : ""}
+    </div>
+
+    ${advisory ? `
+      <div class="advisory-item">
+        <b>Matched FAA Advisory</b><br>
+        ADVZY ${escapeHtml(advisory.advn)}<br>
+        ${escapeHtml(advisory.title || "")}<br>
+        ${advisory.controlElement ? "Control: " + escapeHtml(advisory.controlElement) + "<br>" : ""}
+        ${advisory.effectiveTime ? "Effective: " + escapeHtml(advisory.effectiveTime) + "<br>" : ""}
+        ${advisory.message
+          ? "<div style='margin-top:4px;'>" + escapeHtml(advisory.message.slice(0, 350)) + "</div>"
+          : ""}
+      </div>
+    ` : ""}
+
+    <div class="advisory-item">
+      ${d.advisoryUrl
+        ? "<a href='" + escapeHtml(d.advisoryUrl) + "' target='_blank'>FAA Advisory 원본</a>"
+        : ""}
+    </div>
+  `;
+
+  if (window.innerWidth <= 767) {
+    showMobilePanel("main");
+  }
+}
+
+function selectEnrouteEvent(evt, options) {
+  if (!evt) return false;
+
+  const opts = Object.assign({
+    zoom: true,
+    showDetails: true
+  }, options || {});
+
+  const key = getEnrouteEventKey(evt);
+  const layer = enrouteEventLayerByKey[key];
+
+  if (!layer) return false;
+
+  clearSelectedEnrouteEvent();
+
+  selectedEnrouteEventKey = key;
+  selectedEnrouteEventLayer = layer;
+
+  if (layer.setStyle) {
+    layer.setStyle(getSelectedEnrouteStyle(layer.__enrouteKind || "polygon"));
+  }
+
+  if (layer.bringToFront) {
+    layer.bringToFront();
+  }
+
+  markEnrouteListSelection(evt);
+
+  if (opts.zoom) {
+    try {
+      if (layer.getBounds) {
+        const bounds = layer.getBounds();
+        if (bounds && bounds.isValid && bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.35), { maxZoom: 10 });
+        }
+      } else if (layer.getLatLng) {
+        map.setView(layer.getLatLng(), Math.max(map.getZoom(), 8));
+      }
+    } catch (e) {
+      console.warn("En Route Event zoom failed", e);
+    }
+  }
+
+  if (opts.showDetails) {
+    renderEnrouteEventDetails(evt, findAdvisoryForEnrouteEvent(evt));
+  }
+
+  return true;
+}
+
+function createEnrouteGeometryLayer(evt, index) {
+  const polygonPoints = getEnrouteEventPointArray(evt && evt.polygon);
+
+  if (polygonPoints.length >= 3) {
+    const layer = L.polygon(
+      polygonPoints,
+      Object.assign(
+        { pane: "enrouteEventPane", renderer: enrouteEventRenderer },
+        getNormalEnrouteStyle("polygon")
+      )
+    );
+    layer.__enrouteKind = "polygon";
+    return layer;
+  }
+
+  const linePoints = getEnrouteEventPointArray(evt && evt.line);
+
+  if (linePoints.length >= 2) {
+    const layer = L.polyline(
+      linePoints,
+      Object.assign(
+        { pane: "enrouteEventPane", renderer: enrouteEventRenderer },
+        getNormalEnrouteStyle("line")
+      )
+    );
+    layer.__enrouteKind = "line";
+    return layer;
+  }
+
+  const circleDef = getEnrouteCircleDefinition(evt && evt.circle);
+
+  if (circleDef) {
+    const layer = L.circle(
+      circleDef.center,
+      Object.assign(
+        {
+          pane: "enrouteEventPane",
+          renderer: enrouteEventRenderer,
+          radius: circleDef.radiusMeters
+        },
+        getNormalEnrouteStyle("circle")
+      )
+    );
+    layer.__enrouteKind = "circle";
+    return layer;
+  }
+
+  return null;
+}
+
+function renderEnrouteEventLayers() {
+  clearSelectedEnrouteEvent();
+  enrouteEventLayer.clearLayers();
+  enrouteEventLayerByKey = {};
+
+  (enrouteEventsCache || []).forEach((evt, index) => {
+    const layer = createEnrouteGeometryLayer(evt, index);
+    if (!layer) return;
+
+    const key = getEnrouteEventKey(evt, index);
+    layer.__enrouteEvent = evt;
+    layer.__enrouteKey = key;
+
+    layer.on("click", function(e) {
+      if (e && e.originalEvent) {
+        L.DomEvent.stopPropagation(e.originalEvent);
+      }
+      selectEnrouteEvent(evt, { zoom: false, showDetails: true });
+    });
+
+    enrouteEventLayerByKey[key] = layer;
+    enrouteEventLayer.addLayer(layer);
+  });
+}
+
+async function loadEnrouteEvents(forceRefresh = false) {
+  const now = Date.now();
+
+  if (
+    !forceRefresh &&
+    enrouteEventsCache.length &&
+    now - enrouteEventsLoadedAt < ENROUTE_EVENTS_FRONT_CACHE_TTL_MS
+  ) {
+    renderEnrouteEventLayers();
+    return enrouteEventsCache;
+  }
+
+  const url =
+    ENROUTE_EVENTS_BACKEND_URL +
+    (forceRefresh ? "&force=true" : "");
+
+  try {
+    const res = await fetch(url, { cache: "default" });
+    const data = await res.json();
+
+    if (!data.ok) {
+      throw new Error(data.error || "En Route Events backend error");
+    }
+
+    enrouteEventsCache = Array.isArray(data.events) ? data.events : [];
+    enrouteEventsLoadedAt = Date.now();
+
+    renderEnrouteEventLayers();
+    return enrouteEventsCache;
+
+  } catch (err) {
+    console.error("En Route Events load failed", err);
+
+    // Preserve the rest of the application even when this optional overlay fails.
+    enrouteEventsCache = [];
+    enrouteEventsLoadedAt = Date.now();
+    enrouteEventLayer.clearLayers();
+    enrouteEventLayerByKey = {};
+    return [];
+  }
+}
+
+function advisoryHasEnrouteGeometry(a) {
+  return Boolean(findEnrouteEventForAdvisory(a));
+}
+
+function handleAdvisoryListClick(advn) {
+  const a = (allAdvisoriesCache || []).find(x =>
+    normalizeAdvnText(x.advn) === normalizeAdvnText(advn)
+  );
+
+  if (!a) {
+    showDccInfoAdvisorySummary(advn);
+    return;
+  }
+
+  const evt = findEnrouteEventForAdvisory(a);
+
+  if (evt && selectEnrouteEvent(evt, { zoom: true, showDetails: true })) {
+    return;
+  }
+
+  showDccInfoAdvisorySummary(advn);
+}
+
+
 async function loadAllAdvisoriesForDate(forceRefresh = false) {
   if (isAllAdvisoryLoading) return;
 
@@ -1626,6 +2236,7 @@ buildFacilityAdvisoryMap();
 buildAirportAdvisoryMap();
 buildDccInfoAdvisoryList();
 updateArtccAdvisoryColors();
+await loadEnrouteEvents(forceRefresh);
 renderAirportRestrictionList();
 renderAllVolcanicAshLayers();
 
@@ -1932,9 +2543,12 @@ function renderAdvisoryCategorySection(categoryKey) {
         const icon = c.icon ? " " + c.icon : "";
 
         return `
-          <div class="airport-item"
-               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}'); return false;">
-            <b>ADVZY ${escapeHtml(a.advn)}${icon}</b><br>
+          <div class="airport-item ${advisoryHasEnrouteGeometry(a) ? "enroute-event-list-match" : ""}"
+               data-advn="${escapeHtml(a.advn)}"
+               data-control="${escapeHtml(a.controlElement || "")}"
+               onclick="event.stopPropagation(); handleAdvisoryListClick('${escapeHtml(a.advn)}'); return false;">
+            <b>ADVZY ${escapeHtml(a.advn)}${icon}</b>
+            ${advisoryHasEnrouteGeometry(a) ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement
               ? `<span class="${getCategoryControlClass(categoryKey)}">Control: ${escapeHtml(a.controlElement)}</span>`
@@ -2150,6 +2764,13 @@ function showDccInfoAdvisorySummary(advn, skipZoom) {
   if (!a) {
     box.innerHTML = "DCC / Info Advisory 데이터를 찾을 수 없음.";
     return;
+  }
+
+  if (!skipZoom) {
+    const matchedEnrouteEvent = findEnrouteEventForAdvisory(a);
+    if (matchedEnrouteEvent && selectEnrouteEvent(matchedEnrouteEvent, { zoom: true, showDetails: true })) {
+      return;
+    }
   }
 
   if (a.volcanicAsh && !skipZoom) {
