@@ -2465,7 +2465,7 @@ await loadAllAdvisoriesForDate(true);
       key: "flow",
       label: "Flow Programs",
       className: "section-header-flow",
-      icon: "✈"
+      icon: "☁"
     };
   }
 
@@ -2512,7 +2512,7 @@ await loadAllAdvisoriesForDate(true);
       key: "info",
       label: "DCC / Info Advisory",
       className: "section-header-info",
-      icon: "◆"
+      icon: "ℹ"
     };
   }
 
@@ -2857,7 +2857,7 @@ function getPhlcDisplayName(ap, advisoryList) {
           <div class="airport-item"
                data-airport-code="${escapeHtml(ap)}"
                onclick="selectAirportListRow('${escapeHtml(ap)}'); showAirportAdvisories('${escapeHtml(ap)}')">
-            <b>${escapeHtml(displayAp)} <span style="color:#64748b; font-weight:400;">✈</span></b><br>
+            <b>${escapeHtml(displayAp)} ✈</b><br>
             <span style="color:#6b7280;">${advNums}</span>
           </div>
         `;
