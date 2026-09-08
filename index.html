@@ -116,12 +116,27 @@ html, body {
 
 .section-header-info {
   background: #e5e7eb;
-  color: #111827;
+  color: #374151;
+}
+
+.section-header-flow {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.section-header-route {
+  background: #ffedd5;
+  color: #c2410c;
 }
 
 .section-header-volcanic {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.section-header-other {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .category-control {
@@ -137,7 +152,7 @@ html, body {
 }
 
 .category-control-info {
-  color: #0f766e;
+  color: #4b5563;
 }
 
 .category-control-volcanic {
@@ -145,7 +160,7 @@ html, body {
 }
 
 .category-control-other {
-  color: #92400e;
+  color: #6b7280;
 }
 
     .row {
@@ -1756,7 +1771,7 @@ await loadAllAdvisoriesForDate(true);
     return {
       key: "flow",
       label: "Flow Programs",
-      className: "section-header-info",
+      className: "section-header-flow",
       icon: "✈"
     };
   }
@@ -1779,7 +1794,7 @@ await loadAllAdvisoriesForDate(true);
     return {
       key: "route",
       label: "Route / Airspace",
-      className: "section-header-info",
+      className: "section-header-route",
       icon: "↔"
     };
   }
@@ -1808,19 +1823,29 @@ await loadAllAdvisoriesForDate(true);
     };
   }
 
-  // Airport / ARTCC advisory is the normal home for items tied to an airport
-  // or a mapped control facility, after the more specific categories above.
-  const hasAirportOrFacility =
-    airportCodes.length > 0 ||
+  // Airport-specific advisories are already shown in the Affected Airports section.
+  // Keep them internally categorized but do not duplicate them in the category list.
+  if (airportCodes.length > 0) {
+    return {
+      key: "airportArtcc",
+      label: "Affected Airports",
+      className: "section-header-airports",
+      icon: "●"
+    };
+  }
+
+  // If there is no airport code but the advisory is tied to an ARTCC/FIR,
+  // treat it as an airspace advisory so it remains visible without duplication.
+  const hasArtccOrFir =
     controlFacilityCodes.length > 0 ||
     facilityCodes.length > 0;
 
-  if (hasAirportOrFacility) {
+  if (hasArtccOrFir) {
     return {
-      key: "airportArtcc",
-      label: "Airport / ARTCC Advisory",
-      className: "section-header-airports",
-      icon: "●"
+      key: "route",
+      label: "Route / Airspace",
+      className: "section-header-route",
+      icon: "↔"
     };
   }
 
@@ -1828,7 +1853,7 @@ await loadAllAdvisoriesForDate(true);
   return {
     key: "other",
     label: "Other / Unclassified",
-    className: "section-header-info",
+    className: "section-header-other",
     icon: "?"
   };
 }
@@ -1923,8 +1948,8 @@ function renderAdvisoryCategorySection(categoryKey) {
 
 function renderAllCategorizedAdvisoriesHtml() {
   // Priority/order shown in the right panel.
-  // Airport / ARTCC items remain classified internally, but are not rendered here
-  // because the Affected Airports section already presents the same operational items.
+  // Airport-specific advisories remain represented by Affected Airports and are not
+  // duplicated below. ARTCC/FIR-only advisories are routed into Route / Airspace.
   return [
     "flow",
     "route",
