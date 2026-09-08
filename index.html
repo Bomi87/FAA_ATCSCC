@@ -881,6 +881,18 @@ let airportAdvisoryMap = {};
 let dccInfoAdvisories = [];
 let dccVolcanicAshAdvisories = [];
 
+// Every advisory returned by the backend is assigned to exactly one category.
+// Affected Airports remains as a separate quick-reference index, so an advisory
+// may also be reachable from an airport entry without being lost from categories.
+let categorizedAdvisoryGroups = {
+  flow: [],
+  route: [],
+  info: [],
+  airportArtcc: [],
+  volcanic: [],
+  other: []
+};
+
 let advisoryCacheLoadedAt = 0;
 let advisoryCacheDate = "";
 const ADVISORY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -1672,55 +1684,217 @@ await loadAllAdvisoriesForDate(true);
       });
     }
 
-  function buildDccInfoAdvisoryList() {
+  function getAdvisoryCategoryInfo(a) {
+  const control = String(a && a.controlElement || "").toUpperCase();
+  const title = String(a && a.title || "").toUpperCase();
+  const raw = String(
+    (a && (a.rawText || a.message || a.constrainedFacilities)) || ""
+  ).toUpperCase();
+
+  const facilityCodes = Array.isArray(a && a.facilityCodes) ? a.facilityCodes : [];
+  const controlFacilityCodes = Array.isArray(a && a.controlFacilityCodes) ? a.controlFacilityCodes : [];
+  const airportCodes = Array.isArray(a && a.airportCodes) ? a.airportCodes : [];
+
+  const isVolcanicAsh =
+    Boolean(a && a.volcanicAsh) ||
+    title.includes("VOLCANIC ACTIVITY BULLETIN") ||
+    title.includes("VOLCANIC ASH") ||
+    title.includes("VA ADVISORY") ||
+    raw.includes("VA ADVISORY") ||
+    raw.includes("VOLCANO:") ||
+    raw.includes("OBS VA CLD") ||
+    raw.includes("EST VA CLD") ||
+    raw.includes("FCST VA CLD");
+
+  if (isVolcanicAsh) {
+    return {
+      key: "volcanic",
+      label: "Volcanic Ash",
+      className: "section-header-volcanic",
+      icon: "🌋"
+    };
+  }
+
+  // Flow-management programs:
+  // FCA / AFP / FCAP, GDP, proposed GDP, Ground Stop, etc.
+  const isFlowProgram =
+    title.includes("AIRSPACE FLOW PROGRAM") ||
+    title.includes("GROUND DELAY PROGRAM") ||
+    title.includes("PROPOSED GROUND DELAY PROGRAM") ||
+    title.includes("GROUND STOP") ||
+    title.includes("DELAY PROGRAM") ||
+    /\bELEMENT\s+TYPE\s*:\s*(?:FCA|AFP)\b/.test(raw) ||
+    /^(?:FCA|FCAP|AFP)[A-Z0-9_-]*/.test(control) ||
+    /\bFCA\b/.test(title) ||
+    /\bAFP\b/.test(title);
+
+  if (isFlowProgram) {
+    return {
+      key: "flow",
+      label: "Flow Programs",
+      className: "section-header-info",
+      icon: "✈"
+    };
+  }
+
+  // Route / airspace initiatives. Flow Program is checked first so
+  // "AIRSPACE FLOW PROGRAM" never falls into this category.
+  const isRouteAirspace =
+    title.includes("ROUTE CLOSURE") ||
+    title.includes("ROUTE_CLOSURE") ||
+    title.includes("OCEANIC ROUTE") ||
+    title.includes("NATOTS") ||
+    title.includes("SWAP") ||
+    title.includes("PLAYBOOK") ||
+    title.includes("ROUTE RQD") ||
+    title.includes("ROUTE_RQD") ||
+    title.includes("ROUTE FYI") ||
+    title.includes("ROUTE_FYI");
+
+  if (isRouteAirspace) {
+    return {
+      key: "route",
+      label: "Route / Airspace",
+      className: "section-header-info",
+      icon: "↔"
+    };
+  }
+
+  const isDcc =
+    control === "DCC" ||
+    control.indexOf("DCC") >= 0 ||
+    facilityCodes.includes("DCC");
+
+  const isInfoType =
+    title.includes("OPERATIONS PLAN") ||
+    title.includes("TCA/HOTLINE") ||
+    title.includes("TTCA/HOTLINE") ||
+    title.includes("HOTLINE WEB PAGE") ||
+    title.includes("OUTLOOK") ||
+    title.includes("NRP") ||
+    title.includes("_FYI") ||
+    title.includes(" FYI");
+
+  if (isDcc || isInfoType) {
+    return {
+      key: "info",
+      label: "DCC / Info Advisory",
+      className: "section-header-info",
+      icon: "ℹ"
+    };
+  }
+
+  // Airport / ARTCC advisory is the normal home for items tied to an airport
+  // or a mapped control facility, after the more specific categories above.
+  const hasAirportOrFacility =
+    airportCodes.length > 0 ||
+    controlFacilityCodes.length > 0 ||
+    facilityCodes.length > 0;
+
+  if (hasAirportOrFacility) {
+    return {
+      key: "airportArtcc",
+      label: "Airport / ARTCC Advisory",
+      className: "section-header-airports",
+      icon: "●"
+    };
+  }
+
+  // Critical fallback: never silently drop a newly introduced FAA advisory type.
+  return {
+    key: "other",
+    label: "Other / Unclassified",
+    className: "section-header-info",
+    icon: "?"
+  };
+}
+
+function buildDccInfoAdvisoryList() {
+  categorizedAdvisoryGroups = {
+    flow: [],
+    route: [],
+    info: [],
+    airportArtcc: [],
+    volcanic: [],
+    other: []
+  };
+
+  // Keep legacy arrays populated for existing functions that reference them.
   dccInfoAdvisories = [];
   dccVolcanicAshAdvisories = [];
 
-  allAdvisoriesCache.forEach(a => {
-    const control = String(a.controlElement || "").toUpperCase();
-    const title = String(a.title || "").toUpperCase();
-    const raw = String(a.rawText || a.message || "").toUpperCase();
+  (allAdvisoriesCache || []).forEach(a => {
+    const category = getAdvisoryCategoryInfo(a);
+    const key = category.key;
 
-    const isDcc =
-      control === "DCC" ||
-      control.indexOf("DCC") >= 0 ||
-      (a.facilityCodes || []).includes("DCC");
-
-    const isVolcanicAsh =
-      Boolean(a.volcanicAsh) ||
-      title.includes("VOLCANIC ACTIVITY BULLETIN") ||
-      title.includes("VOLCANIC") ||
-      title.includes("VOLCANIC ASH") ||
-      title.includes("VA ADVISORY") ||
-      raw.includes("VA ADVISORY") ||
-      raw.includes("VOLCANO:") ||
-      raw.includes("OBS VA CLD") ||
-      raw.includes("EST VA CLD") ||
-      raw.includes("FCST VA CLD");
-
-    const isInfoType =
-      title.includes("OPERATIONS PLAN") ||
-      title.includes("TCA/HOTLINE") ||
-      title.includes("TTCA/HOTLINE") ||
-      title.includes("HOTLINE WEB PAGE") ||
-      title.includes("NRP");
-
-    // 화산재는 무조건 3번째 카테고리로 분리
-    if (isVolcanicAsh) {
-      dccVolcanicAshAdvisories.push(a);
-      return;
+    if (!categorizedAdvisoryGroups[key]) {
+      categorizedAdvisoryGroups.other.push(a);
+    } else {
+      categorizedAdvisoryGroups[key].push(a);
     }
 
-    // 기존 DCC / Info Advisory
-    if (isDcc || isInfoType) {
+    if (key === "volcanic") {
+      dccVolcanicAshAdvisories.push(a);
+    } else if (key === "info") {
       dccInfoAdvisories.push(a);
     }
+  });
+
+  Object.keys(categorizedAdvisoryGroups).forEach(key => {
+    categorizedAdvisoryGroups[key].sort(
+      (a, b) => Number(b.advn) - Number(a.advn)
+    );
   });
 
   dccInfoAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
   dccVolcanicAshAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
 }
-    
+
+function renderAdvisoryCategorySection(categoryKey) {
+  const list = categorizedAdvisoryGroups[categoryKey] || [];
+  if (!list.length) return "";
+
+  const sample = getAdvisoryCategoryInfo(list[0]);
+  const label = sample.label;
+  const sectionClass = sample.className || "section-header-info";
+
+  return `
+    <div style="margin-top:10px; padding-top:8px; border-top:2px solid #d1d5db;">
+      <div style="margin-bottom:6px;">
+        <span class="section-header ${sectionClass}">${escapeHtml(label)}</span>
+      </div>
+      ${list.map(a => {
+        const c = getAdvisoryCategoryInfo(a);
+        const icon = c.icon ? " " + c.icon : "";
+
+        return `
+          <div class="airport-item"
+               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}'); return false;">
+            <b>ADVZY ${escapeHtml(a.advn)}${icon}</b><br>
+            <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
+            ${a.controlElement
+              ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>`
+              : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderAllCategorizedAdvisoriesHtml() {
+  // Priority/order shown in the right panel.
+  // Every advisory in allAdvisoriesCache appears in exactly one of these sections.
+  return [
+    "flow",
+    "route",
+    "info",
+    "airportArtcc",
+    "volcanic",
+    "other"
+  ].map(renderAdvisoryCategorySection).join("");
+}
+
     function updateArtccAdvisoryColors() {
       Object.keys(artccLayerIndex).forEach(code => {
         const layer = artccLayerIndex[code];
@@ -1851,18 +2025,25 @@ function getPhlcDisplayName(ap, advisoryList) {
  function renderAirportRestrictionList() {
   const box = document.getElementById("airportRestrictionList");
 
-const airports = Object.keys(airportAdvisoryMap).sort();
-const dccHtml = renderDccInfoAdvisoryHtml();
-const volcanicAshHtml = renderDccVolcanicAshAdvisoryHtml();
+  const airports = Object.keys(airportAdvisoryMap).sort();
+  const categorizedHtml = renderAllCategorizedAdvisoriesHtml();
 
-if (!airports.length && !dccHtml && !volcanicAshHtml) {
-  box.innerHTML = "영향 공항 없음";
-  return;
-}
+  if (!airports.length && !categorizedHtml) {
+    box.innerHTML = "영향 공항 / Advisory 없음";
+    return;
+  }
 
+  // Affected Airports is retained as a quick-reference index.
+  // The exhaustive category list below is the no-drop master list.
   const airportHtml = airports.length
-    ? airports.map(ap => {
-        const list = airportAdvisoryMap[ap] || [];
+    ? `
+      <div style="margin-bottom:6px;">
+        <span class="section-header section-header-airports">Affected Airports</span>
+      </div>
+      ${airports.map(ap => {
+        const list = (airportAdvisoryMap[ap] || [])
+          .slice()
+          .sort((a, b) => Number(b.advn) - Number(a.advn));
 
         const advNums = list.map((a, idx) => {
           const firCodes = Array.from(new Set(
@@ -1882,18 +2063,19 @@ if (!airports.length && !dccHtml && !volcanicAshHtml) {
             "</span>";
         }).join(" ");
 
-     const displayAp = getPhlcDisplayName(ap, list);
+        const displayAp = getPhlcDisplayName(ap, list);
 
-return `
-  <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
-    <b>${escapeHtml(displayAp)}</b><br>
-    <span style="color:#6b7280;">${advNums}</span>
-  </div>
-`;
-      }).join("")
+        return `
+          <div class="airport-item" onclick="showAirportAdvisories('${escapeHtml(ap)}')">
+            <b>${escapeHtml(displayAp)}</b><br>
+            <span style="color:#6b7280;">${advNums}</span>
+          </div>
+        `;
+      }).join("")}
+    `
     : "<div style='color:#6b7280; margin-bottom:8px;'>영향 공항 없음</div>";
 
-box.innerHTML = airportHtml + dccHtml + volcanicAshHtml;
+  box.innerHTML = airportHtml + categorizedHtml;
 }
 
 function showDccInfoAdvisorySummary(advn, skipZoom) {
@@ -1926,13 +2108,15 @@ function showDccInfoAdvisorySummary(advn, skipZoom) {
   String(a.rawText || a.message || "").toUpperCase().includes("OBS VA CLD") ||
   String(a.rawText || a.message || "").toUpperCase().includes("FCST VA CLD");
 
-const sectionTitle = isVolcanicAsh
-  ? "DCC / Volcanic Ash"
-  : "DCC / Info Advisory";
+const categoryInfo = getAdvisoryCategoryInfo(a);
 
-const sectionClass = isVolcanicAsh
-  ? "section-header-volcanic"
-  : "section-header-info";
+const sectionTitle = categoryInfo.label || (
+  isVolcanicAsh ? "Volcanic Ash" : "DCC / Info Advisory"
+);
+
+const sectionClass = categoryInfo.className || (
+  isVolcanicAsh ? "section-header-volcanic" : "section-header-info"
+);
   box.innerHTML = `
     <div class="advisory-item">
       <span class="section-header ${sectionClass}">${sectionTitle}</span>
