@@ -1714,11 +1714,28 @@ function getEnrouteEventPointArray(container) {
 
   if (!raw) return [];
 
-  return raw.map(p => {
+  // NAS Status gives normal -180..180 longitudes (e.g. New York = -74).
+  // This map intentionally renders all layers in the world copy nearest
+  // GLOBAL_WORLD_REFERENCE_LON (130), so shift/unwrap En Route Event
+  // coordinates to the same copy. Otherwise U.S. events appear on the
+  // duplicated world at the far left of the map.
+  const coords = raw.map(p => {
     const lat = Number(p && (p.latitude ?? p.lat));
     const lon = Number(p && (p.longitude ?? p.lon ?? p.lng));
-    return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : null;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return null;
+    }
+
+    return { lat: lat, lon: lon };
   }).filter(Boolean);
+
+  if (!coords.length) return [];
+
+  return unwrapCoordSequence(
+    coords,
+    GLOBAL_WORLD_REFERENCE_LON
+  );
 }
 
 function getEnrouteCircleDefinition(circle) {
@@ -1747,7 +1764,10 @@ function getEnrouteCircleDefinition(circle) {
   // Leaflet circle radius is meters. NAS Status operational radii are interpreted
   // as nautical miles only when a numeric radius is supplied.
   return {
-    center: [lat, lon],
+    center: [
+      lat,
+      shiftLonNearReference(lon, GLOBAL_WORLD_REFERENCE_LON)
+    ],
     radiusMeters: radiusNm * 1852
   };
 }
