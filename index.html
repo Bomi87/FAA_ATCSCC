@@ -124,6 +124,30 @@ html, body {
   color: #991b1b;
 }
 
+.category-control {
+  font-weight: 800;
+}
+
+.category-control-flow {
+  color: #7c3aed;
+}
+
+.category-control-route {
+  color: #c2410c;
+}
+
+.category-control-info {
+  color: #0f766e;
+}
+
+.category-control-volcanic {
+  color: #b91c1c;
+}
+
+.category-control-other {
+  color: #92400e;
+}
+
     .row {
       margin-bottom: 8px;
     }
@@ -1850,6 +1874,21 @@ function buildDccInfoAdvisoryList() {
   dccVolcanicAshAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
 }
 
+function getCategoryControlClass(categoryKey) {
+  switch (categoryKey) {
+    case "flow":
+      return "category-control category-control-flow";
+    case "route":
+      return "category-control category-control-route";
+    case "info":
+      return "category-control category-control-info";
+    case "volcanic":
+      return "category-control category-control-volcanic";
+    default:
+      return "category-control category-control-other";
+  }
+}
+
 function renderAdvisoryCategorySection(categoryKey) {
   const list = categorizedAdvisoryGroups[categoryKey] || [];
   if (!list.length) return "";
@@ -1873,7 +1912,7 @@ function renderAdvisoryCategorySection(categoryKey) {
             <b>ADVZY ${escapeHtml(a.advn)}${icon}</b><br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement
-              ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>`
+              ? `<span class="${getCategoryControlClass(categoryKey)}">Control: ${escapeHtml(a.controlElement)}</span>`
               : ""}
           </div>
         `;
@@ -1884,12 +1923,12 @@ function renderAdvisoryCategorySection(categoryKey) {
 
 function renderAllCategorizedAdvisoriesHtml() {
   // Priority/order shown in the right panel.
-  // Every advisory in allAdvisoriesCache appears in exactly one of these sections.
+  // Airport / ARTCC items remain classified internally, but are not rendered here
+  // because the Affected Airports section already presents the same operational items.
   return [
     "flow",
     "route",
     "info",
-    "airportArtcc",
     "volcanic",
     "other"
   ].map(renderAdvisoryCategorySection).join("");
