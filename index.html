@@ -3389,7 +3389,17 @@ const geoLayer = L.geoJSON(normalizedBaseballTfrData, {
 
 function getLayerStatusByCode(code) {
   if (selectedIdent && code === selectedIdent) return "selected";
-  if (facilityAdvisoryMap[code] && facilityAdvisoryMap[code].length > 0) return "hasAdvisory";
+
+  // ARTCC impact overlay OFF 상태에서는 hover/mouseout 이후에도
+  // advisory 영향 주황색을 다시 복원하지 않는다.
+  if (
+    artccImpactVisible &&
+    facilityAdvisoryMap[code] &&
+    facilityAdvisoryMap[code].length > 0
+  ) {
+    return "hasAdvisory";
+  }
+
   return "normal";
 }
     /*******************************************************
