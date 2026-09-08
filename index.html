@@ -1918,6 +1918,7 @@ function markEnrouteListSelection(evt) {
 }
 
 function findEnrouteEventForAdvisory(a) {
+  if (!isCurrentUtcAdvisoryDate()) return null;
   if (!a) return null;
 
   const advn = normalizeAdvnText(a.advn);
@@ -2202,7 +2203,26 @@ function renderEnrouteEventLayers() {
   });
 }
 
+function isCurrentUtcAdvisoryDate() {
+  return getDateValue() === getTodayUtcDateValue();
+}
+
+function clearEnrouteEventsForHistoricalView() {
+  clearSelectedEnrouteEvent();
+  enrouteEventsCache = [];
+  enrouteEventsLoadedAt = 0;
+  enrouteEventLayer.clearLayers();
+  enrouteEventLayerByKey = {};
+}
+
 async function loadEnrouteEvents(forceRefresh = false) {
+  // /api/enroute-events 는 현재 Active Event 전용 데이터다.
+  // 과거/미래 Advisory 날짜에서는 현재 event를 잘못 연결하지 않도록 완전히 숨긴다.
+  if (!isCurrentUtcAdvisoryDate()) {
+    clearEnrouteEventsForHistoricalView();
+    return [];
+  }
+
   const now = Date.now();
 
   if (
@@ -2245,6 +2265,7 @@ async function loadEnrouteEvents(forceRefresh = false) {
 }
 
 function advisoryHasEnrouteGeometry(a) {
+  if (!isCurrentUtcAdvisoryDate()) return false;
   return Boolean(findEnrouteEventForAdvisory(a));
 }
 
@@ -2658,6 +2679,8 @@ function renderAdvisoryCategorySection(categoryKey) {
 
 
 function renderEnrouteEventsHtml() {
+  if (!isCurrentUtcAdvisoryDate()) return "";
+
   const events = (enrouteEventsCache || []).slice();
 
   if (!events.length) return "";
