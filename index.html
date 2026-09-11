@@ -3587,6 +3587,57 @@ function getPhlcDisplayName(ap, advisoryList) {
   }
 }
 
+
+function getStructuredAdvisoryDisplay_(a) {
+  const source = [
+    a && a.rawText,
+    a && a.message,
+    a && a.title
+  ].filter(Boolean).join("\n");
+
+  const oneLine = String(source || "").replace(/\s+/g, " ").trim();
+
+  function field(label) {
+    const safe = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const nextLabels = [
+      "NAME", "CONSTRAINED AREA", "CONSTRAINED FACILITIES", "REASON",
+      "INCLUDE TRAFFIC", "FACILITIES INCLUDED", "FLIGHT STATUS", "VALID",
+      "PROBABILITY OF EXTENSION", "REMARKS", "ASSOCIATED RESTRICTIONS",
+      "MODIFICATIONS", "ROUTES", "TMI ID", "EVENT TIME", "EFFECTIVE TIME",
+      "CTL ELEMENT", "PROGRAM RATE", "DEP SCOPE", "MAXIMUM DELAY", "AVERAGE DELAY",
+      "MESSAGE", "SIGNATURE"
+    ].map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+
+    const re = new RegExp(
+      safe + "\\s*:\\s*(.*?)(?=\\s+(?:" + nextLabels + ")\\s*:|$)",
+      "i"
+    );
+    const m = oneLine.match(re);
+    return m ? m[1].trim() : "";
+  }
+
+  let compactTitle = String(a && a.title || "").replace(/\s+/g, " ").trim();
+
+  compactTitle = compactTitle
+    .split(/\s+(?=NAME\s*:|CONSTRAINED\s+AREA\s*:|CONSTRAINED\s+FACILITIES\s*:|EVENT\s+TIME\s*:|MESSAGE\s*:)/i)[0]
+    .trim();
+
+  compactTitle = compactTitle.replace(
+    /^ATCSCC\s+ADVZY\s+\d+\s+\S+\s+\d{2}\/\d{2}\/\d{2}\s+/i,
+    ""
+  ).trim();
+
+  return {
+    title: compactTitle || String(a && a.title || ""),
+    name: field("NAME"),
+    constrainedArea: field("CONSTRAINED AREA"),
+    constrainedFacilities: field("CONSTRAINED FACILITIES"),
+    reason: field("REASON"),
+    valid: field("VALID"),
+    tmiId: field("TMI ID")
+  };
+}
+
 function showDccInfoAdvisorySummary(advn, skipZoom, advisoryDate) {
   const box = document.getElementById("advisoryBox");
 
@@ -3627,6 +3678,7 @@ function showDccInfoAdvisorySummary(advn, skipZoom, advisoryDate) {
   String(a.rawText || a.message || "").toUpperCase().includes("FCST VA CLD");
 
 const categoryInfo = getAdvisoryCategoryInfo(a);
+const structuredDisplay = getStructuredAdvisoryDisplay_(a);
 
 const sectionTitle = categoryInfo.label || (
   isVolcanicAsh ? "Volcanic Ash" : "DCC / Info Advisory"
@@ -3643,14 +3695,23 @@ const sectionClass = categoryInfo.className || (
 
     <div class="advisory-item">
       ${getAdvisoryDisplayLabelHtml(a)}<br>
-      ${highlightTerms(a.title || "", terms)}<br>
+      <b>${highlightTerms(structuredDisplay.title, terms)}</b><br>
+      ${structuredDisplay.name ? "Name: " + escapeHtml(structuredDisplay.name) + "<br>" : ""}
+      ${structuredDisplay.constrainedArea ? "Constrained Area: " + highlightTerms(structuredDisplay.constrainedArea, terms) + "<br>" : ""}
+      ${structuredDisplay.constrainedFacilities ? "Constrained Facilities: " + highlightTerms(structuredDisplay.constrainedFacilities, terms) + "<br>" : ""}
+      ${structuredDisplay.reason ? "Reason: " + escapeHtml(structuredDisplay.reason) + "<br>" : ""}
+      ${structuredDisplay.valid ? "Valid: " + escapeHtml(structuredDisplay.valid) + "<br>" : ""}
+      ${structuredDisplay.tmiId ? "TMI ID: " + escapeHtml(structuredDisplay.tmiId) + "<br>" : ""}
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
       ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
       ${a.effectiveTime ? "Effective: " + highlightTerms(a.effectiveTime, terms) + "<br>" : ""}
-      ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
-      ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
-    
+      ${(!structuredDisplay.constrainedArea && !structuredDisplay.constrainedFacilities && a.constrainedFacilities)
+        ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>"
+        : ""}
+      ${(!structuredDisplay.name && !structuredDisplay.valid && !structuredDisplay.constrainedArea && a.message)
+        ? "<div style='margin-top:4px; white-space:pre-wrap;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>"
+        : ""}
       ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
     </div>
   `;
