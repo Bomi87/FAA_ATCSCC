@@ -164,7 +164,7 @@ html, body {
 }
 
 .enroute-event-list-match {
-  border-left: 3px solid #dc2626;
+  border-left: 3px solid #84cc16;
   padding-left: 6px;
 }
 
@@ -200,18 +200,18 @@ html, body {
 }
 
 .enroute-event-hint {
-  color: #b91c1c;
+  color: #65a30d;
   font-weight: 800;
   font-size: 10px;
 }
 
 .section-header-enroute {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #ecfccb;
+  color: #4d7c0f;
 }
 
 .enroute-polygon-icon {
-  color: #dc2626;
+  color: #84cc16;
   font-weight: 800;
 }
 
@@ -220,7 +220,7 @@ html, body {
 }
 
 .enroute-event-detail-title {
-  color: #b91c1c;
+  color: #4d7c0f;
   font-weight: 800;
 }
 
@@ -1904,7 +1904,7 @@ function hasDrawableEnrouteGeometry(evt) {
 function getNormalEnrouteStyle(kind) {
   if (kind === "line") {
     return {
-      color: "#dc2626",
+      color: "#84cc16",
       weight: 3,
       opacity: 0.9,
       interactive: true
@@ -1912,10 +1912,10 @@ function getNormalEnrouteStyle(kind) {
   }
 
   return {
-    color: "#dc2626",
+    color: "#84cc16",
     weight: 2,
     opacity: 0.95,
-    fillColor: "#ef4444",
+    fillColor: "#bef264",
     fillOpacity: 0.16,
     interactive: true
   };
@@ -1924,7 +1924,7 @@ function getNormalEnrouteStyle(kind) {
 function getSelectedEnrouteStyle(kind) {
   if (kind === "line") {
     return {
-      color: "#991b1b",
+      color: "#4d7c0f",
       weight: 6,
       opacity: 1,
       interactive: true
@@ -1932,10 +1932,10 @@ function getSelectedEnrouteStyle(kind) {
   }
 
   return {
-    color: "#991b1b",
+    color: "#4d7c0f",
     weight: 5,
     opacity: 1,
-    fillColor: "#dc2626",
+    fillColor: "#84cc16",
     fillOpacity: 0.32,
     interactive: true
   };
