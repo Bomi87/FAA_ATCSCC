@@ -763,11 +763,6 @@ input {
     </button>
   </div>
    
-    <div class="row">
-      <label for="dateInput">Advisory Date</label>
-   <input id="dateInput" type="date" />
-    </div>
-
     <label>Route Overlay</label>
     <div class="route-btn-row">
       <button id="btnHL8080" class="route-btn" onclick="loadRouteByAircraft('HL8080')">HL8080</button>
@@ -941,6 +936,7 @@ const ENROUTE_EVENTS_FRONT_CACHE_TTL_MS = 3 * 60 * 1000;
 
 // Right-list selection is independent from whether the advisory has map geometry.
 let selectedAdvisoryAdvn = "";
+let selectedAdvisoryDate = "";
 let selectedAirportCode = "";
 
 // Controls only the orange ARTCC "has advisory" overlay.
@@ -1069,7 +1065,7 @@ let isAdvisoryDetailOpen = false;
  function isAdvisoryCacheValid() {
   if (!allAdvisoriesCache || !allAdvisoriesCache.length) return false;
   if (!advisoryCacheLoadedAt) return false;
-  if (advisoryCacheDate !== getDateValue()) return false;
+  if (advisoryCacheDate !== "CURRENT") return false;
 
   return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
 }
@@ -1616,11 +1612,7 @@ function getYesterdayUtcDateValue() {
 }
 
 function setDefaultAdvisoryDate() {
-  const input = document.getElementById("dateInput");
-
-  if (!input.value) {
-    input.value = getTodayUtcDateValue();
-  }
+  // Current-only mode: 날짜 선택 UI를 사용하지 않음.
 }
     function getUtcDateValueByOffset(daysOffset) {
   const d = new Date();
@@ -1629,10 +1621,10 @@ function setDefaultAdvisoryDate() {
 }
 
 function setDateInputValue(dateValue) {
-  document.getElementById("dateInput").value = dateValue;
+  // Current-only mode compatibility no-op.
 }
     function getDateValue() {
-  return document.getElementById("dateInput").value || getTodayUtcDateValue();
+  return getTodayUtcDateValue();
 }
 
     function buildFaaAdvisoryListUrl(date) {
@@ -1669,6 +1661,47 @@ function normalizeAdvnText(value) {
   const n = Number(s);
   if (Number.isFinite(n)) return String(n);
   return s.replace(/^0+/, "") || "0";
+}
+
+function getAdvisoryDateLabel(a) {
+  const s = String(a && a.date || "");
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+
+  const months = [
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+  ];
+
+  const monthIndex = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  if (monthIndex < 0 || monthIndex > 11 || !day) return "";
+
+  return day + months[monthIndex];
+}
+
+function getAdvisoryDisplayLabel(a) {
+  const advn = normalizeAdvnText(a && a.advn);
+  const dateLabel = getAdvisoryDateLabel(a);
+  return "ADVZY " + advn + (dateLabel ? " [" + dateLabel + "]" : "");
+}
+
+function findAdvisoryByAdvnAndDate(advn, date) {
+  const n = normalizeAdvnText(advn);
+  const d = String(date || "");
+
+  if (d) {
+    const exact = (allAdvisoriesCache || []).find(a =>
+      normalizeAdvnText(a && a.advn) === n && String(a && a.date || "") === d
+    );
+    if (exact) return exact;
+  }
+
+  // 날짜 미지정 호출(En Route Event 연계 등)은 현재 UTC 날짜를 우선.
+  const today = getTodayUtcDateValue();
+  return (allAdvisoriesCache || []).find(a =>
+    normalizeAdvnText(a && a.advn) === n && String(a && a.date || "") === today
+  ) || (allAdvisoriesCache || []).find(a => normalizeAdvnText(a && a.advn) === n);
 }
 
 function getEnrouteEventAdvn(evt) {
@@ -1883,15 +1916,23 @@ function clearSelectedEnrouteEvent() {
   });
 }
 
-function selectAdvisoryListRow(advn) {
+function selectAdvisoryListRow(advn, advisoryDate) {
   const normalized = normalizeAdvnText(advn);
+  const targetDate = String(advisoryDate || "");
+
   selectedAdvisoryAdvn = normalized;
+  selectedAdvisoryDate = targetDate;
 
   document.querySelectorAll("[data-advn]").forEach(el => {
     const rowAdvn = normalizeAdvnText(el.getAttribute("data-advn"));
+    const rowDate = String(el.getAttribute("data-date") || "");
+
+    const numberMatch = Boolean(normalized && rowAdvn === normalized);
+    const dateMatch = !targetDate || rowDate === targetDate;
+
     el.classList.toggle(
       "advisory-list-active",
-      Boolean(normalized && rowAdvn === normalized)
+      numberMatch && dateMatch
     );
   });
 }
@@ -1923,6 +1964,7 @@ function selectEnrouteEventListRow(key) {
 
 function clearRightPanelSelections() {
   selectedAdvisoryAdvn = "";
+  selectedAdvisoryDate = "";
   selectedAirportCode = "";
 
   document.querySelectorAll("[data-advn]").forEach(el => {
@@ -2223,6 +2265,37 @@ function getEnrouteEventDetails(evt) {
   };
 }
 
+function isEnrouteEventExpired(evt, nowMs) {
+  const d = getEnrouteEventDetails(evt);
+  const endText = String(d.endTime || "").trim();
+
+  // End time이 없거나 파싱 불가하면 데이터 미싱 방지를 위해 유지.
+  if (!endText) return false;
+
+  const end = new Date(endText);
+  if (isNaN(end.getTime())) return false;
+
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  return end.getTime() < now;
+}
+
+function filterNonExpiredEnrouteEvents(events, nowMs) {
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  return (Array.isArray(events) ? events : []).filter(evt => !isEnrouteEventExpired(evt, now));
+}
+
+function pruneExpiredEnrouteEvents() {
+  if (!Array.isArray(enrouteEventsCache) || !enrouteEventsCache.length) return false;
+
+  const filtered = filterNonExpiredEnrouteEvents(enrouteEventsCache, Date.now());
+  if (filtered.length === enrouteEventsCache.length) return false;
+
+  enrouteEventsCache = filtered;
+  renderEnrouteEventLayers();
+  renderAirportRestrictionList();
+  return true;
+}
+
 function renderEnrouteEventDetails(evt, advisory) {
   const box = document.getElementById("advisoryBox");
   if (!box) return;
@@ -2257,7 +2330,7 @@ function renderEnrouteEventDetails(evt, advisory) {
     ${advisory ? `
       <div class="advisory-item">
         <b>Matched FAA Advisory</b><br>
-        ADVZY ${escapeHtml(advisory.advn)}<br>
+        ${escapeHtml(getAdvisoryDisplayLabel(advisory))}<br>
         ${escapeHtml(advisory.title || "")}<br>
         ${advisory.controlElement ? "Control: " + escapeHtml(advisory.controlElement) + "<br>" : ""}
         ${advisory.effectiveTime ? "Effective: " + escapeHtml(advisory.effectiveTime) + "<br>" : ""}
@@ -2449,6 +2522,9 @@ async function loadEnrouteEvents(forceRefresh = false) {
     enrouteEventsCache.length &&
     now - enrouteEventsLoadedAt < ENROUTE_EVENTS_FRONT_CACHE_TTL_MS
   ) {
+    // Front cache를 재사용하더라도 종료시각이 지난 event는 즉시 제거한다.
+    // Start Time은 검사하지 않으므로 미래 시작 event는 계속 미리 표시된다.
+    enrouteEventsCache = filterNonExpiredEnrouteEvents(enrouteEventsCache, now);
     renderEnrouteEventLayers();
     return enrouteEventsCache;
   }
@@ -2465,7 +2541,12 @@ async function loadEnrouteEvents(forceRefresh = false) {
       throw new Error(data.error || "En Route Events backend error");
     }
 
-    enrouteEventsCache = Array.isArray(data.events) ? data.events : [];
+    // FAA가 issue한 En Route Event는 시작 전이라도 미리 표시한다.
+    // 단, End Time이 이미 지난 event는 지도/목록에서 제거한다.
+    enrouteEventsCache = filterNonExpiredEnrouteEvents(
+      Array.isArray(data.events) ? data.events : [],
+      Date.now()
+    );
     enrouteEventsLoadedAt = Date.now();
 
     renderEnrouteEventLayers();
@@ -2488,21 +2569,19 @@ function advisoryHasEnrouteGeometry(a) {
   return Boolean(findEnrouteEventForAdvisory(a));
 }
 
-function handleAdvisoryListClick(advn) {
+function handleAdvisoryListClick(advn, advisoryDate) {
   selectedAirportCode = "";
   document.querySelectorAll("[data-airport-code]").forEach(el => {
     el.classList.remove("advisory-list-active");
   });
 
-  selectAdvisoryListRow(advn);
+  selectAdvisoryListRow(advn, advisoryDate);
 
-  const a = (allAdvisoriesCache || []).find(x =>
-    normalizeAdvnText(x.advn) === normalizeAdvnText(advn)
-  );
+  const a = findAdvisoryByAdvnAndDate(advn, advisoryDate);
 
   if (!a) {
     clearSelectedEnrouteEvent();
-    showDccInfoAdvisorySummary(advn, true);
+    showDccInfoAdvisorySummary(advn, true, advisoryDate);
     return;
   }
 
@@ -2515,7 +2594,7 @@ function handleAdvisoryListClick(advn) {
   // A non-map advisory should release any previously selected red geometry,
   // while the newly clicked advisory row stays shaded.
   clearSelectedEnrouteEvent();
-  showDccInfoAdvisorySummary(advn, true);
+  showDccInfoAdvisorySummary(advn, true, advisoryDate);
 }
 
 
@@ -2524,7 +2603,7 @@ async function loadAllAdvisoriesForDate(forceRefresh = false) {
 
   isAllAdvisoryLoading = true;
 
-  const date = getDateValue();
+  const date = getTodayUtcDateValue();
   const box = document.getElementById("airportRestrictionList");
 
   if (!FAA_APPS_SCRIPT_URL || FAA_APPS_SCRIPT_URL.includes("여기에_")) {
@@ -2537,7 +2616,7 @@ async function loadAllAdvisoriesForDate(forceRefresh = false) {
 
 const url =
   FAA_APPS_SCRIPT_URL +
-  "?date=" + encodeURIComponent(date) +
+  "?current=true" +
   "&includeDetails=true" +
   (forceRefresh ? "&force=true" : "");
   
@@ -2551,22 +2630,8 @@ const url =
 
     allAdvisoriesCache = data.advisories || [];
 
-    const todayUtc = getTodayUtcDateValue();
-    const yesterdayUtc = getYesterdayUtcDateValue();
-
-    // 오늘 UTC 조회 결과가 0개면 어제 UTC로 자동 재조회
-    if (allAdvisoriesCache.length === 0 && date === todayUtc) {
-      setDateInputValue(yesterdayUtc);
-      updateFaaLink();
-
-      box.innerHTML = "오늘 UTC Advisory 없음. 어제 UTC 날짜로 재조회 중...";
-
-      isAllAdvisoryLoading = false; // 중요: 재조회 전에 false로 풀어줘야 함
-      return loadAllAdvisoriesForDate();
-    }
-
 advisoryCacheLoadedAt = Date.now();
-advisoryCacheDate = getDateValue();
+advisoryCacheDate = "CURRENT";
 
 buildFacilityAdvisoryMap();
 buildAirportAdvisoryMap();
@@ -2881,9 +2946,10 @@ function renderAdvisoryCategorySection(categoryKey) {
         return `
           <div class="airport-item ${advisoryHasEnrouteGeometry(a) ? "enroute-event-list-match" : ""}"
                data-advn="${escapeHtml(a.advn)}"
+               data-date="${escapeHtml(a.date || "")}"
                data-control="${escapeHtml(a.controlElement || "")}"
-               onclick="event.stopPropagation(); handleAdvisoryListClick('${escapeHtml(a.advn)}'); return false;">
-            <b>ADVZY ${escapeHtml(a.advn)}${icon}</b>
+               onclick="event.stopPropagation(); handleAdvisoryListClick('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
+            <b>${escapeHtml(getAdvisoryDisplayLabel(a))}${icon}</b>
             ${advisoryHasEnrouteGeometry(a) ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement
@@ -2926,7 +2992,7 @@ function renderEnrouteEventsHtml() {
 
         const linkedAdvisoryText =
           matched && matched.advn != null
-            ? `Linked Advisory: ADVZY ${escapeHtml(matched.advn)}`
+            ? `Linked Advisory: ${escapeHtml(getAdvisoryDisplayLabel(matched))}`
             : "";
 
         return `
@@ -3047,8 +3113,8 @@ function renderDccInfoAdvisoryHtml() {
       ${dccInfoAdvisories.map(a => {
         return `
           <div class="airport-item"
-               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}'); return false;">
-            <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
+            <b>${escapeHtml(getAdvisoryDisplayLabel(a))}</b><br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
           </div>
@@ -3071,8 +3137,8 @@ function renderDccVolcanicAshAdvisoryHtml() {
       ${dccVolcanicAshAdvisories.map(a => {
         return `
           <div class="airport-item"
-               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}'); return false;">
-            <b>ADVZY ${escapeHtml(a.advn)} 🌋</b><br>
+               onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
+            <b>${escapeHtml(getAdvisoryDisplayLabel(a))} 🌋</b><br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
           </div>
@@ -3184,7 +3250,7 @@ function getPhlcDisplayName(ap, advisoryList) {
           const comma = idx < list.length - 1 ? "," : "";
 
           return "<span class='advzy-chip'>" +
-            "<span class='advzy-prefix'>ADVZY " + escapeHtml(a.advn) + "</span>" +
+            "<span class='advzy-prefix'>" + escapeHtml(getAdvisoryDisplayLabel(a)) + "</span>" +
             (firCodes
               ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
               : "") +
@@ -3222,18 +3288,18 @@ function getPhlcDisplayName(ap, advisoryList) {
   syncArtccImpactToggleButton();
 
   if (selectedAdvisoryAdvn) {
-    selectAdvisoryListRow(selectedAdvisoryAdvn);
+    selectAdvisoryListRow(selectedAdvisoryAdvn, selectedAdvisoryDate);
   } else if (selectedAirportCode) {
     selectAirportListRow(selectedAirportCode);
   }
 }
 
-function showDccInfoAdvisorySummary(advn, skipZoom) {
+function showDccInfoAdvisorySummary(advn, skipZoom, advisoryDate) {
   const box = document.getElementById("advisoryBox");
 
-  selectAdvisoryListRow(advn);
+  selectAdvisoryListRow(advn, advisoryDate);
 
-  const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
+  const a = findAdvisoryByAdvnAndDate(advn, advisoryDate);
 
   if (!a) {
     box.innerHTML = "DCC / Info Advisory 데이터를 찾을 수 없음.";
@@ -3283,7 +3349,7 @@ const sectionClass = categoryInfo.className || (
     </div>
 
     <div class="advisory-item">
-      <b>ADVZY ${escapeHtml(a.advn)}</b><br>
+      <b>${escapeHtml(getAdvisoryDisplayLabel(a))}</b><br>
       ${highlightTerms(a.title || "", terms)}<br>
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
@@ -3305,6 +3371,7 @@ const sectionClass = categoryInfo.className || (
       clearSelectedEnrouteEvent();
 
       selectedAdvisoryAdvn = "";
+      selectedAdvisoryDate = "";
       document.querySelectorAll("[data-advn]").forEach(el => {
         el.classList.remove("advisory-list-active");
       });
@@ -3340,8 +3407,8 @@ box.innerHTML = `
           <div class="advisory-item">
         <a href="#"
    style="font-weight:700; color:#111827; text-decoration:underline;"
-   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">
-  ADVZY ${escapeHtml(a.advn)}
+   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
+  ${escapeHtml(getAdvisoryDisplayLabel(a))}
 </a><br>
             ${highlightTerms(a.title || "", terms)}<br>
             ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
@@ -3397,8 +3464,8 @@ box.innerHTML = `
       <div class="advisory-item">
         <a href="#"
    style="font-weight:700; color:#111827; text-decoration:underline;"
-   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">
-  ADVZY ${escapeHtml(a.advn)}
+   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
+  ${escapeHtml(getAdvisoryDisplayLabel(a))}
 </a><br>
         ${highlightTerms(a.title || "", terms)}<br>
         ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
@@ -3420,12 +3487,11 @@ box.innerHTML = `
         return;
       }
 
-      const date = getDateValue();
       box.innerHTML = ident + " Advisory 조회 중...";
 
       const url =
         FAA_APPS_SCRIPT_URL +
-        "?date=" + encodeURIComponent(date) +
+        "?current=true" +
         "&facility=" + encodeURIComponent(ident) +
         "&includeDetails=true";
 
@@ -3457,8 +3523,8 @@ box.innerHTML = `
             <div class="advisory-item">
               <a href="#"
    style="font-weight:700; color:#111827; text-decoration:underline;"
-   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}'); return false;">
-  ADVZY ${escapeHtml(a.advn)}
+   onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
+  ${escapeHtml(getAdvisoryDisplayLabel(a))}
 </a><br>
               ${highlightTerms(a.title || "", terms)}<br>
               ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
@@ -3477,13 +3543,13 @@ box.innerHTML = `
       }
     }
 
-function showAdvisoryDetail(advn) {
+function showAdvisoryDetail(advn, advisoryDate) {
   const box = document.getElementById("advisoryBox");
 
   previousAdvisoryBoxHtml = box.innerHTML;
   isAdvisoryDetailOpen = true;
 
-  const a = allAdvisoriesCache.find(x => String(x.advn) === String(advn));
+  const a = findAdvisoryByAdvnAndDate(advn, advisoryDate);
 
   if (!a) {
     document.getElementById("advisoryBox").innerHTML = "Advisory 상세 데이터를 찾을 수 없음.";
@@ -3529,7 +3595,7 @@ function showAdvisoryDetail(advn) {
     </div>
 
     <div class="advisory-item">
-      <b>${highlightTerms("ADVZY " + a.advn, uniqueTerms)}</b><br>
+      <b>${highlightTerms(getAdvisoryDisplayLabel(a), uniqueTerms)}</b><br>
       ${highlightTerms(a.title || "", uniqueTerms)}<br>
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
@@ -5659,14 +5725,16 @@ function startArtccAppAfterAuth() {
   if (authScreen) authScreen.style.display = "none";
   if (appRoot) appRoot.style.display = "block";
 
-  document.getElementById("dateInput").addEventListener("change", function () {
-    updateFaaLink();
-    loadAllAdvisoriesForDate();
-  });
-
   setDefaultAdvisoryDate();
   updateFaaLink();
   initNdbFixedControl();
+
+  // En Route Event(FCAP/FCA 등)는 issue되면 시작 전에도 미리 표시하되,
+  // End Time이 지나면 새로고침을 기다리지 않고 화면에서 제거한다.
+  // 네트워크 호출 없이 메모리 데이터만 30초마다 정리한다.
+  setInterval(function () {
+    pruneExpiredEnrouteEvents();
+  }, 30 * 1000);
 
   setTimeout(function () {
     if (map && map.invalidateSize) {
