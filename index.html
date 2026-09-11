@@ -164,13 +164,14 @@ html, body {
 }
 
 .enroute-event-list-match {
-  border-left: 3px solid #84cc16;
+  border-left: 3px solid #dc2626;
   padding-left: 6px;
 }
 
 .advisory-list-active {
-  background: #fef2f2 !important;
-  box-shadow: inset 0 0 0 1px #fecaca;
+  /* 선택된 FCAP/FCA/Advisory와 연관된 행은 빨간 음영으로 명확히 표시 */
+  background: #fee2e2 !important;
+  box-shadow: inset 0 0 0 1px #fca5a5;
 }
 
 .airport-section-title-row {
@@ -200,18 +201,18 @@ html, body {
 }
 
 .enroute-event-hint {
-  color: #65a30d;
+  color: #b91c1c;
   font-weight: 800;
   font-size: 10px;
 }
 
 .section-header-enroute {
-  background: #ecfccb;
-  color: #4d7c0f;
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .enroute-polygon-icon {
-  color: #84cc16;
+  color: #dc2626;
   font-weight: 800;
 }
 
@@ -220,8 +221,34 @@ html, body {
 }
 
 .enroute-event-detail-title {
-  color: #4d7c0f;
+  color: #b91c1c;
   font-weight: 800;
+}
+
+.enroute-alert-marker {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #b91c1c;
+  border: 2px solid #dc2626;
+  clip-path: polygon(50% 4%, 96% 92%, 4% 92%);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.95), 0 1px 5px rgba(0,0,0,0.35);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.enroute-alert-marker span {
+  position: relative;
+  top: 2px;
+}
+
+.leaflet-marker-icon.enroute-alert-divicon {
+  background: transparent !important;
+  border: none !important;
 }
 
     .row {
@@ -1904,7 +1931,7 @@ function hasDrawableEnrouteGeometry(evt) {
 function getNormalEnrouteStyle(kind) {
   if (kind === "line") {
     return {
-      color: "#84cc16",
+      color: "#dc2626",
       weight: 3,
       opacity: 0.9,
       interactive: true
@@ -1912,10 +1939,10 @@ function getNormalEnrouteStyle(kind) {
   }
 
   return {
-    color: "#84cc16",
+    color: "#dc2626",
     weight: 2,
     opacity: 0.95,
-    fillColor: "#bef264",
+    fillColor: "#ef4444",
     fillOpacity: 0.16,
     interactive: true
   };
@@ -1924,7 +1951,7 @@ function getNormalEnrouteStyle(kind) {
 function getSelectedEnrouteStyle(kind) {
   if (kind === "line") {
     return {
-      color: "#4d7c0f",
+      color: "#991b1b",
       weight: 6,
       opacity: 1,
       interactive: true
@@ -1932,13 +1959,80 @@ function getSelectedEnrouteStyle(kind) {
   }
 
   return {
-    color: "#4d7c0f",
+    color: "#991b1b",
     weight: 5,
     opacity: 1,
-    fillColor: "#84cc16",
+    fillColor: "#dc2626",
     fillOpacity: 0.32,
     interactive: true
   };
+}
+
+function getEnrouteEventVisualCenter(evt, layer) {
+  const circleDef = getEnrouteCircleDefinition(evt && evt.circle);
+  if (circleDef && Array.isArray(circleDef.center)) {
+    return circleDef.center;
+  }
+
+  if (layer) {
+    if (layer.getBounds) {
+      const b = layer.getBounds();
+      if (b && b.isValid && b.isValid()) return b.getCenter();
+    }
+    if (layer.getLatLng) {
+      return layer.getLatLng();
+    }
+  }
+
+  const polygonPoints = getEnrouteEventPointArray(evt && evt.polygon);
+  if (polygonPoints.length >= 3) {
+    return L.latLngBounds(polygonPoints).getCenter();
+  }
+
+  const linePoints = getEnrouteEventPointArray(evt && evt.line);
+  if (linePoints.length >= 2) {
+    return linePoints[Math.floor(linePoints.length / 2)];
+  }
+
+  return null;
+}
+
+function createEnrouteAlertMarker(evt, layer, key) {
+  const center = getEnrouteEventVisualCenter(evt, layer);
+  if (!center) return null;
+
+  const marker = L.marker(center, {
+    interactive: true,
+    keyboard: false,
+    zIndexOffset: 2000,
+    icon: L.divIcon({
+      className: "enroute-alert-divicon",
+      html: '<div class="enroute-alert-marker"><span>!</span></div>',
+      iconSize: [22, 20],
+      iconAnchor: [11, 10] 
+    })
+  });
+
+  marker.__enrouteEvent = evt;
+  marker.__enrouteKey = key;
+
+  marker.on("click", function(e) {
+    if (e && e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+      if (e.originalEvent.stopImmediatePropagation) {
+        e.originalEvent.stopImmediatePropagation();
+      }
+    }
+
+    selectEnrouteEvent(evt, {
+      zoom: false,
+      showDetails: true,
+      eventKey: key,
+      scrollRight: true
+    });
+  });
+
+  return marker;
 }
 
 function clearSelectedEnrouteEvent() {
@@ -2531,6 +2625,11 @@ function renderEnrouteEventLayers() {
 
     enrouteEventLayerByKey[key] = layer;
     enrouteEventLayer.addLayer(layer);
+
+    const alertMarker = createEnrouteAlertMarker(evt, layer, key);
+    if (alertMarker) {
+      enrouteEventLayer.addLayer(alertMarker);
+    }
   });
 }
 
