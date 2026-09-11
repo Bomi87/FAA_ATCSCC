@@ -520,6 +520,15 @@ html, body {
   white-space: nowrap;
 }
 
+/* ADVZY number stays bold, issue-date tag stays normal-weight for readability. */
+.advzy-number-label {
+  font-weight: 700;
+}
+
+.advzy-date-label {
+  font-weight: 400 !important;
+}
+
 .airport-artcc {
   color: #2563eb;
   font-weight: 700;
@@ -1686,6 +1695,36 @@ function getAdvisoryDisplayLabel(a) {
   return "ADVZY " + advn + (dateLabel ? " [" + dateLabel + "]" : "");
 }
 
+function getAdvisoryDisplayLabelHtml(a) {
+  const advn = escapeHtml(normalizeAdvnText(a && a.advn));
+  const dateLabel = escapeHtml(getAdvisoryDateLabel(a));
+
+  return "<span class=\"advzy-number-label\">ADVZY " + advn + "</span>" +
+    (dateLabel ? " <span class=\"advzy-date-label\">[" + dateLabel + "]</span>" : "");
+}
+
+
+function compareAdvisoriesNewestFirst(a, b) {
+  const dateA = String(a && a.date || "");
+  const dateB = String(b && b.date || "");
+
+  // Newer UTC issue date first. ISO yyyy-MM-dd strings sort chronologically.
+  if (dateA !== dateB) {
+    return dateB.localeCompare(dateA);
+  }
+
+  // Within the same UTC date, higher ADVZY number first.
+  const advA = Number(a && a.advn);
+  const advB = Number(b && b.advn);
+
+  if (Number.isFinite(advA) && Number.isFinite(advB) && advA !== advB) {
+    return advB - advA;
+  }
+
+  // Stable fallback for non-numeric/unexpected values.
+  return String(b && b.advn || "").localeCompare(String(a && a.advn || ""));
+}
+
 function findAdvisoryByAdvnAndDate(advn, date) {
   const n = normalizeAdvnText(advn);
   const d = String(date || "");
@@ -2330,7 +2369,7 @@ function renderEnrouteEventDetails(evt, advisory) {
     ${advisory ? `
       <div class="advisory-item">
         <b>Matched FAA Advisory</b><br>
-        ${escapeHtml(getAdvisoryDisplayLabel(advisory))}<br>
+        ${getAdvisoryDisplayLabelHtml(advisory)}<br>
         ${escapeHtml(advisory.title || "")}<br>
         ${advisory.controlElement ? "Control: " + escapeHtml(advisory.controlElement) + "<br>" : ""}
         ${advisory.effectiveTime ? "Effective: " + escapeHtml(advisory.effectiveTime) + "<br>" : ""}
@@ -2903,12 +2942,12 @@ function buildDccInfoAdvisoryList() {
 
   Object.keys(categorizedAdvisoryGroups).forEach(key => {
     categorizedAdvisoryGroups[key].sort(
-      (a, b) => Number(b.advn) - Number(a.advn)
+      compareAdvisoriesNewestFirst
     );
   });
 
-  dccInfoAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
-  dccVolcanicAshAdvisories.sort((a, b) => Number(b.advn) - Number(a.advn));
+  dccInfoAdvisories.sort(compareAdvisoriesNewestFirst);
+  dccVolcanicAshAdvisories.sort(compareAdvisoriesNewestFirst);
 }
 
 function getCategoryControlClass(categoryKey) {
@@ -2949,7 +2988,7 @@ function renderAdvisoryCategorySection(categoryKey) {
                data-date="${escapeHtml(a.date || "")}"
                data-control="${escapeHtml(a.controlElement || "")}"
                onclick="event.stopPropagation(); handleAdvisoryListClick('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
-            <b>${escapeHtml(getAdvisoryDisplayLabel(a))}${icon}</b>
+            ${getAdvisoryDisplayLabelHtml(a)}${icon}
             ${advisoryHasEnrouteGeometry(a) ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement
@@ -3114,7 +3153,7 @@ function renderDccInfoAdvisoryHtml() {
         return `
           <div class="airport-item"
                onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
-            <b>${escapeHtml(getAdvisoryDisplayLabel(a))}</b><br>
+            ${getAdvisoryDisplayLabelHtml(a)}<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
           </div>
@@ -3138,7 +3177,7 @@ function renderDccVolcanicAshAdvisoryHtml() {
         return `
           <div class="airport-item"
                onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
-            <b>${escapeHtml(getAdvisoryDisplayLabel(a))} 🌋</b><br>
+            ${getAdvisoryDisplayLabelHtml(a)} 🌋<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
           </div>
@@ -3238,7 +3277,7 @@ function getPhlcDisplayName(ap, advisoryList) {
       ${airports.map(ap => {
         const list = (airportAdvisoryMap[ap] || [])
           .slice()
-          .sort((a, b) => Number(b.advn) - Number(a.advn));
+          .sort(compareAdvisoriesNewestFirst);
 
         const advNums = list.map((a, idx) => {
           const firCodes = Array.from(new Set(
@@ -3250,7 +3289,7 @@ function getPhlcDisplayName(ap, advisoryList) {
           const comma = idx < list.length - 1 ? "," : "";
 
           return "<span class='advzy-chip'>" +
-            "<span class='advzy-prefix'>" + escapeHtml(getAdvisoryDisplayLabel(a)) + "</span>" +
+            "<span class='advzy-prefix'>" + getAdvisoryDisplayLabelHtml(a) + "</span>" +
             (firCodes
               ? "<span class='airport-artcc'>(" + escapeHtml(firCodes) + ")</span>"
               : "") +
@@ -3349,7 +3388,7 @@ const sectionClass = categoryInfo.className || (
     </div>
 
     <div class="advisory-item">
-      <b>${escapeHtml(getAdvisoryDisplayLabel(a))}</b><br>
+      ${getAdvisoryDisplayLabelHtml(a)}<br>
       ${highlightTerms(a.title || "", terms)}<br>
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
@@ -3383,7 +3422,7 @@ const sectionClass = categoryInfo.className || (
 
      const matches = (airportAdvisoryMap[ap] || [])
   .slice()
-  .sort((a, b) => Number(b.advn) - Number(a.advn));
+  .sort(compareAdvisoriesNewestFirst);
 
       if (!matches.length) {
         box.innerHTML = ap + " 관련 Advisory 없음";
@@ -3406,9 +3445,9 @@ box.innerHTML = `
         return `
           <div class="advisory-item">
         <a href="#"
-   style="font-weight:700; color:#111827; text-decoration:underline;"
+   style="color:#111827; text-decoration:underline;"
    onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
-  ${escapeHtml(getAdvisoryDisplayLabel(a))}
+  ${getAdvisoryDisplayLabelHtml(a)}
 </a><br>
             ${highlightTerms(a.title || "", terms)}<br>
             ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
@@ -3432,7 +3471,7 @@ box.innerHTML = `
 
  const matches = (facilityAdvisoryMap[code] || [])
   .slice()
-  .sort((a, b) => Number(b.advn) - Number(a.advn));
+  .sort(compareAdvisoriesNewestFirst);
 
   // 선택된 ARTCC의 왼쪽 목록과 동일한 Advisory들을 오른쪽에서도 음영 표시.
   if (selectedIdent && code === selectedIdent) {
@@ -3463,9 +3502,9 @@ box.innerHTML = `
     return `
       <div class="advisory-item">
         <a href="#"
-   style="font-weight:700; color:#111827; text-decoration:underline;"
+   style="color:#111827; text-decoration:underline;"
    onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
-  ${escapeHtml(getAdvisoryDisplayLabel(a))}
+  ${getAdvisoryDisplayLabelHtml(a)}
 </a><br>
         ${highlightTerms(a.title || "", terms)}<br>
         ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
@@ -3510,7 +3549,7 @@ box.innerHTML = `
 
       box.innerHTML = (data.advisories || [])
   .slice()
-  .sort((a, b) => Number(b.advn) - Number(a.advn))
+  .sort(compareAdvisoriesNewestFirst)
   .map(a => {
           const terms = Array.from(new Set([
             ident,
@@ -3522,9 +3561,9 @@ box.innerHTML = `
           return `
             <div class="advisory-item">
               <a href="#"
-   style="font-weight:700; color:#111827; text-decoration:underline;"
+   style="color:#111827; text-decoration:underline;"
    onclick="event.stopPropagation(); showAdvisoryDetail('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
-  ${escapeHtml(getAdvisoryDisplayLabel(a))}
+  ${getAdvisoryDisplayLabelHtml(a)}
 </a><br>
               ${highlightTerms(a.title || "", terms)}<br>
               ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
@@ -3595,7 +3634,7 @@ function showAdvisoryDetail(advn, advisoryDate) {
     </div>
 
     <div class="advisory-item">
-      <b>${highlightTerms(getAdvisoryDisplayLabel(a), uniqueTerms)}</b><br>
+      ${getAdvisoryDisplayLabelHtml(a)}<br>
       ${highlightTerms(a.title || "", uniqueTerms)}<br>
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
