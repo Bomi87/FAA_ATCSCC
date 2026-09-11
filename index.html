@@ -2846,7 +2846,14 @@ function handleAdvisoryListClick(advn, advisoryDate) {
   // A non-map advisory should release any previously selected red geometry,
   // while the newly clicked advisory row stays shaded.
   clearSelectedEnrouteEvent();
-  showDccInfoAdvisorySummary(advn, true, advisoryDate);
+
+  // Volcanic Ash advisory는 오른쪽 목록 클릭 시 해당 화산재 영역으로 이동.
+  // 일반 advisory는 기존처럼 별도 zoom 없이 상세만 표시.
+  showDccInfoAdvisorySummary(
+    advn,
+    a.volcanicAsh ? false : true,
+    advisoryDate
+  );
 }
 
 
