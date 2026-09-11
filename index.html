@@ -925,7 +925,12 @@ const enrouteEventRenderer = L.svg({
   pane: "enrouteEventPane",
   padding: 0.5
 });
-const tfrRenderer = L.canvas({
+// TFR는 SVG renderer 사용.
+// Canvas renderer는 TFR를 한 번 표시한 뒤 레이어를 OFF해도
+// tfrPane 위에 투명 canvas가 남아 하위 ARTCC 클릭을 가로챌 수 있음.
+// SVG는 실제 interactive path에서만 pointer event를 받으므로
+// TFR 도형 클릭 기능을 유지하면서 ARTCC 클릭도 정상 동작함.
+const tfrRenderer = L.svg({
   pane: "tfrPane",
   padding: 0.5
 });
