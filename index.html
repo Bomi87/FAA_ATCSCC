@@ -139,6 +139,16 @@ html, body {
   color: #4b5563;
 }
 
+.section-header-manual {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.category-control-manual {
+  color: #92400e;
+}
+
 .category-control {
   font-weight: 400;
 }
@@ -1047,6 +1057,7 @@ let dccVolcanicAshAdvisories = [];
 // Affected Airports remains as a separate quick-reference index, so an advisory
 // may also be reachable from an airport entry without being lost from categories.
 let categorizedAdvisoryGroups = {
+  manual: [],
   flow: [],
   route: [],
   info: [],
@@ -2968,6 +2979,8 @@ await loadAllAdvisoriesForDate(true);
       facilityAdvisoryMap = {};
 
       allAdvisoriesCache.forEach(a => {
+        if (a && a.manualCheckRequired) return;
+
         // 중요: 지도 색칠은 CONTROL ELEMENT 기준만 사용
         // Canadian FIR: CZQ Advisory는 CZQM/CZQX 두 지도 도형에 같이 매핑
         (a.controlFacilityCodes || []).forEach(rawCode => {
@@ -2985,6 +2998,8 @@ await loadAllAdvisoriesForDate(true);
       airportAdvisoryMap = {};
 
       allAdvisoriesCache.forEach(a => {
+        if (a && a.manualCheckRequired) return;
+
         (a.airportCodes || []).forEach(ap => {
           if (!airportAdvisoryMap[ap]) {
             airportAdvisoryMap[ap] = [];
@@ -3004,6 +3019,15 @@ await loadAllAdvisoriesForDate(true);
   const facilityCodes = Array.isArray(a && a.facilityCodes) ? a.facilityCodes : [];
   const controlFacilityCodes = Array.isArray(a && a.controlFacilityCodes) ? a.controlFacilityCodes : [];
   const airportCodes = Array.isArray(a && a.airportCodes) ? a.airportCodes : [];
+
+  if (a && a.manualCheckRequired) {
+    return {
+      key: "manual",
+      label: "Manual Check Required",
+      className: "section-header-manual",
+      icon: "⚠"
+    };
+  }
 
   const isVolcanicAsh =
     Boolean(a && a.volcanicAsh) ||
@@ -3131,6 +3155,7 @@ await loadAllAdvisoriesForDate(true);
 
 function buildDccInfoAdvisoryList() {
   categorizedAdvisoryGroups = {
+    manual: [],
     flow: [],
     route: [],
     info: [],
@@ -3172,6 +3197,8 @@ function buildDccInfoAdvisoryList() {
 
 function getCategoryControlClass(categoryKey) {
   switch (categoryKey) {
+    case "manual":
+      return "category-control category-control-manual";
     case "flow":
       return "category-control category-control-flow";
     case "route":
@@ -3213,6 +3240,9 @@ function renderAdvisoryCategorySection(categoryKey) {
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${a.controlElement
               ? `<span class="${getCategoryControlClass(categoryKey)}">Control: ${escapeHtml(a.controlElement)}</span>`
+              : ""}
+            ${categoryKey === "manual" && a.manualCheckReason
+              ? `<br><span style="color:#92400e; font-size:10px;">Parser: ${escapeHtml(a.manualCheckReason)}</span>`
               : ""}
           </div>
         `;
@@ -3472,10 +3502,11 @@ function getPhlcDisplayName(ap, advisoryList) {
   const box = document.getElementById("airportRestrictionList");
 
   const airports = Object.keys(airportAdvisoryMap).sort();
+  const manualHtml = renderAdvisoryCategorySection("manual");
   const enrouteHtml = renderEnrouteEventsHtml();
   const categorizedHtml = renderAllCategorizedAdvisoriesHtml();
 
-  if (!airports.length && !enrouteHtml && !categorizedHtml) {
+  if (!airports.length && !manualHtml && !enrouteHtml && !categorizedHtml) {
     box.innerHTML = "영향 공항 / Advisory 없음";
     return;
   }
@@ -3545,7 +3576,7 @@ function getPhlcDisplayName(ap, advisoryList) {
       </div>
     `;
 
-  box.innerHTML = airportHtml + enrouteHtml + categorizedHtml;
+  box.innerHTML = manualHtml + airportHtml + enrouteHtml + categorizedHtml;
 
   syncArtccImpactToggleButton();
 
