@@ -3680,6 +3680,34 @@ function showDccInfoAdvisorySummary(advn, skipZoom, advisoryDate) {
 const categoryInfo = getAdvisoryCategoryInfo(a);
 const structuredDisplay = getStructuredAdvisoryDisplay_(a);
 
+const rawControlElement = String(a && a.controlElement || "").trim();
+const upperControlElement = rawControlElement.toUpperCase();
+
+let displayControlElement = rawControlElement;
+
+// DCC Advisory는 실제 constrained ARTCC/FIR을 함께 보여준다.
+// 예:
+//   CONTROL ELEMENT: DCC
+//   CONSTRAINED AREA: ZAB
+// -> Control: DCC/ZAB
+//
+// CONSTRAINED AREA가 없고 CONSTRAINED FACILITIES만 있는 DCC Advisory는
+// 그 값을 보조 표시한다. 이미 DCC/XXX 형태면 중복 추가하지 않는다.
+if (
+  upperControlElement === "DCC" &&
+  rawControlElement.indexOf("/") < 0
+) {
+  const constrainedControlDisplay =
+    structuredDisplay.constrainedArea ||
+    structuredDisplay.constrainedFacilities ||
+    "";
+
+  if (constrainedControlDisplay) {
+    displayControlElement =
+      rawControlElement + "/" + constrainedControlDisplay;
+  }
+}
+
 const sectionTitle = categoryInfo.label || (
   isVolcanicAsh ? "Volcanic Ash" : "DCC / Info Advisory"
 );
@@ -3702,7 +3730,7 @@ const sectionClass = categoryInfo.className || (
       ${structuredDisplay.reason ? "Reason: " + escapeHtml(structuredDisplay.reason) + "<br>" : ""}
       ${structuredDisplay.valid ? "Valid: " + escapeHtml(structuredDisplay.valid) + "<br>" : ""}
       ${structuredDisplay.tmiId ? "TMI ID: " + escapeHtml(structuredDisplay.tmiId) + "<br>" : ""}
-      ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
+      ${displayControlElement ? "Control: " + highlightTerms(displayControlElement, terms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
       ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
       ${a.effectiveTime ? "Effective: " + highlightTerms(a.effectiveTime, terms) + "<br>" : ""}
