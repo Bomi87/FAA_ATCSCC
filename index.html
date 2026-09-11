@@ -3493,8 +3493,11 @@ function getPhlcDisplayName(ap, advisoryList) {
           .sort(compareAdvisoriesNewestFirst);
 
         const advNums = list.map((a, idx) => {
+          // Affected Airports 옆 괄호의 ARTCC는 advisory 본문 전체(DEP SCOPE 등)가 아니라
+          // CONTROL ELEMENT 기준 ARTCC/FIR만 표시한다.
+          // 예: AUS/ZHU GDP에서 DEP SCOPE에 ZLA/ZAU/...가 있어도 여기에는 ZHU만 표시.
           const firCodes = Array.from(new Set(
-            (a.facilityCodes || [])
+            (a.controlFacilityCodes || [])
               .map(code => normalizeMapFacilityCode(code))
               .filter(Boolean)
           )).join("/");
