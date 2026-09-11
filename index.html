@@ -3195,6 +3195,29 @@ function buildDccInfoAdvisoryList() {
   dccVolcanicAshAdvisories.sort(compareAdvisoriesNewestFirst);
 }
 
+
+function getRightPanelControlDisplay_(a) {
+  const rawControl = String(a && a.controlElement || "").trim();
+  if (!rawControl) return "";
+
+  const upperControl = rawControl.toUpperCase();
+
+  // 오른쪽 요약 리스트에서만 DCC + 실제 constrained area/facility를 함께 표시.
+  // 예: DCC + CONSTRAINED AREA: ZAB -> DCC/ZAB
+  if (upperControl === "DCC" && rawControl.indexOf("/") < 0) {
+    const structured = getStructuredAdvisoryDisplay_(a);
+    const constrained =
+      String(structured.constrainedArea || "").trim() ||
+      String(structured.constrainedFacilities || "").trim();
+
+    if (constrained) {
+      return rawControl + "/" + constrained;
+    }
+  }
+
+  return rawControl;
+}
+
 function getCategoryControlClass(categoryKey) {
   switch (categoryKey) {
     case "manual":
@@ -3228,6 +3251,7 @@ function renderAdvisoryCategorySection(categoryKey) {
       ${list.map(a => {
         const c = getAdvisoryCategoryInfo(a);
         const icon = c.icon ? " " + c.icon : "";
+        const rightControlDisplay = getRightPanelControlDisplay_(a);
 
         return `
           <div class="airport-item ${advisoryHasEnrouteGeometry(a) ? "enroute-event-list-match" : ""}"
@@ -3238,8 +3262,8 @@ function renderAdvisoryCategorySection(categoryKey) {
             ${getAdvisoryDisplayLabelHtml(a)}${icon}
             ${advisoryHasEnrouteGeometry(a) ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
-            ${a.controlElement
-              ? `<span class="${getCategoryControlClass(categoryKey)}">Control: ${escapeHtml(a.controlElement)}</span>`
+            ${rightControlDisplay
+              ? `<span class="${getCategoryControlClass(categoryKey)}">Control: ${escapeHtml(rightControlDisplay)}</span>`
               : ""}
             ${categoryKey === "manual" && a.manualCheckReason
               ? `<br><span style="color:#92400e; font-size:10px;">Parser: ${escapeHtml(a.manualCheckReason)}</span>`
@@ -3400,12 +3424,13 @@ function renderDccInfoAdvisoryHtml() {
   <span class="section-header section-header-info">DCC / Info Advisory</span>
 </div>
       ${dccInfoAdvisories.map(a => {
+        const rightControlDisplay = getRightPanelControlDisplay_(a);
         return `
           <div class="airport-item"
                onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
             ${getAdvisoryDisplayLabelHtml(a)}<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
-            ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
+            ${rightControlDisplay ? `<span style="color:#6b7280;">Control: ${escapeHtml(rightControlDisplay)}</span>` : ""}
           </div>
         `;
       }).join("")}
@@ -3424,12 +3449,13 @@ function renderDccVolcanicAshAdvisoryHtml() {
   <span class="section-header section-header-volcanic">DCC / Volcanic Ash</span>
 </div>
       ${dccVolcanicAshAdvisories.map(a => {
+        const rightControlDisplay = getRightPanelControlDisplay_(a);
         return `
           <div class="airport-item"
                onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
             ${getAdvisoryDisplayLabelHtml(a)} 🌋<br>
             <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
-            ${a.controlElement ? `<span style="color:#6b7280;">Control: ${escapeHtml(a.controlElement)}</span>` : ""}
+            ${rightControlDisplay ? `<span style="color:#6b7280;">Control: ${escapeHtml(rightControlDisplay)}</span>` : ""}
           </div>
         `;
       }).join("")}
@@ -3680,34 +3706,6 @@ function showDccInfoAdvisorySummary(advn, skipZoom, advisoryDate) {
 const categoryInfo = getAdvisoryCategoryInfo(a);
 const structuredDisplay = getStructuredAdvisoryDisplay_(a);
 
-const rawControlElement = String(a && a.controlElement || "").trim();
-const upperControlElement = rawControlElement.toUpperCase();
-
-let displayControlElement = rawControlElement;
-
-// DCC Advisory는 실제 constrained ARTCC/FIR을 함께 보여준다.
-// 예:
-//   CONTROL ELEMENT: DCC
-//   CONSTRAINED AREA: ZAB
-// -> Control: DCC/ZAB
-//
-// CONSTRAINED AREA가 없고 CONSTRAINED FACILITIES만 있는 DCC Advisory는
-// 그 값을 보조 표시한다. 이미 DCC/XXX 형태면 중복 추가하지 않는다.
-if (
-  upperControlElement === "DCC" &&
-  rawControlElement.indexOf("/") < 0
-) {
-  const constrainedControlDisplay =
-    structuredDisplay.constrainedArea ||
-    structuredDisplay.constrainedFacilities ||
-    "";
-
-  if (constrainedControlDisplay) {
-    displayControlElement =
-      rawControlElement + "/" + constrainedControlDisplay;
-  }
-}
-
 const sectionTitle = categoryInfo.label || (
   isVolcanicAsh ? "Volcanic Ash" : "DCC / Info Advisory"
 );
@@ -3730,7 +3728,7 @@ const sectionClass = categoryInfo.className || (
       ${structuredDisplay.reason ? "Reason: " + escapeHtml(structuredDisplay.reason) + "<br>" : ""}
       ${structuredDisplay.valid ? "Valid: " + escapeHtml(structuredDisplay.valid) + "<br>" : ""}
       ${structuredDisplay.tmiId ? "TMI ID: " + escapeHtml(structuredDisplay.tmiId) + "<br>" : ""}
-      ${displayControlElement ? "Control: " + highlightTerms(displayControlElement, terms) + "<br>" : ""}
+      ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
       ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
       ${a.effectiveTime ? "Effective: " + highlightTerms(a.effectiveTime, terms) + "<br>" : ""}
