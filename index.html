@@ -1968,30 +1968,139 @@ function getSelectedEnrouteStyle(kind) {
   };
 }
 
+function pointInPolygonLatLng(point, polygonPoints) {
+  if (!point || !Array.isArray(polygonPoints) || polygonPoints.length < 3) return false;
+
+  const y = Number(point.lat != null ? point.lat : point[0]);
+  const x = Number(point.lng != null ? point.lng : point[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+  let inside = false;
+  for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
+    const yi = Number(polygonPoints[i][0]);
+    const xi = Number(polygonPoints[i][1]);
+    const yj = Number(polygonPoints[j][0]);
+    const xj = Number(polygonPoints[j][1]);
+
+    const crosses = ((yi > y) !== (yj > y)) &&
+      (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
+
+    if (crosses) inside = !inside;
+  }
+
+  return inside;
+}
+
+function getPolygonCentroidLatLng(polygonPoints) {
+  if (!Array.isArray(polygonPoints) || polygonPoints.length < 3) return null;
+
+  let area2 = 0;
+  let cx = 0;
+  let cy = 0;
+
+  for (let i = 0; i < polygonPoints.length; i++) {
+    const j = (i + 1) % polygonPoints.length;
+    const x1 = Number(polygonPoints[i][1]);
+    const y1 = Number(polygonPoints[i][0]);
+    const x2 = Number(polygonPoints[j][1]);
+    const y2 = Number(polygonPoints[j][0]);
+    const cross = x1 * y2 - x2 * y1;
+
+    area2 += cross;
+    cx += (x1 + x2) * cross;
+    cy += (y1 + y2) * cross;
+  }
+
+  if (Math.abs(area2) < 1e-12) return null;
+
+  cx /= (3 * area2);
+  cy /= (3 * area2);
+
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  return L.latLng(cy, cx);
+}
+
+function getInteriorPolygonLabelPoint(polygonPoints) {
+  if (!Array.isArray(polygonPoints) || polygonPoints.length < 3) return null;
+
+  // 1) 면적 중심이 실제 폴리곤 내부면 가장 자연스러운 중앙점으로 사용.
+  const centroid = getPolygonCentroidLatLng(polygonPoints);
+  if (centroid && pointInPolygonLatLng(centroid, polygonPoints)) {
+    return centroid;
+  }
+
+  // 2) 오목한 FCAP/FCA에서 centroid가 밖으로 나갈 수 있으므로,
+  //    여러 수평 단면 중 가장 넓은 내부 구간의 중점을 선택한다.
+  const bounds = L.latLngBounds(polygonPoints);
+  if (!bounds || !bounds.isValid || !bounds.isValid()) return null;
+
+  const south = bounds.getSouth();
+  const north = bounds.getNorth();
+  let best = null;
+  let bestWidth = -1;
+
+  const samples = 31;
+  for (let s = 1; s < samples; s++) {
+    const lat = south + (north - south) * (s / samples);
+    const intersections = [];
+
+    for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
+      const y1 = Number(polygonPoints[j][0]);
+      const x1 = Number(polygonPoints[j][1]);
+      const y2 = Number(polygonPoints[i][0]);
+      const x2 = Number(polygonPoints[i][1]);
+
+      if ((y1 > lat) === (y2 > lat)) continue;
+      const lon = x1 + ((lat - y1) * (x2 - x1)) / ((y2 - y1) || 1e-12);
+      if (Number.isFinite(lon)) intersections.push(lon);
+    }
+
+    intersections.sort((a, b) => a - b);
+    for (let k = 0; k + 1 < intersections.length; k += 2) {
+      const left = intersections[k];
+      const right = intersections[k + 1];
+      const width = right - left;
+      if (width > bestWidth) {
+        bestWidth = width;
+        best = L.latLng(lat, (left + right) / 2);
+      }
+    }
+  }
+
+  if (best && pointInPolygonLatLng(best, polygonPoints)) return best;
+
+  // 3) 최후 fallback: 첫 점과 다음 점 사이를 약간 안쪽으로 이동.
+  const p0 = polygonPoints[0];
+  const p1 = polygonPoints[1];
+  if (p0 && p1) {
+    return L.latLng(
+      Number(p0[0]) * 0.75 + Number(p1[0]) * 0.25,
+      Number(p0[1]) * 0.75 + Number(p1[1]) * 0.25
+    );
+  }
+
+  return null;
+}
+
 function getEnrouteEventVisualCenter(evt, layer) {
   const circleDef = getEnrouteCircleDefinition(evt && evt.circle);
   if (circleDef && Array.isArray(circleDef.center)) {
     return circleDef.center;
   }
 
-  if (layer) {
-    if (layer.getBounds) {
-      const b = layer.getBounds();
-      if (b && b.isValid && b.isValid()) return b.getCenter();
-    }
-    if (layer.getLatLng) {
-      return layer.getLatLng();
-    }
-  }
-
   const polygonPoints = getEnrouteEventPointArray(evt && evt.polygon);
   if (polygonPoints.length >= 3) {
-    return L.latLngBounds(polygonPoints).getCenter();
+    const interiorPoint = getInteriorPolygonLabelPoint(polygonPoints);
+    if (interiorPoint) return interiorPoint;
   }
 
   const linePoints = getEnrouteEventPointArray(evt && evt.line);
   if (linePoints.length >= 2) {
     return linePoints[Math.floor(linePoints.length / 2)];
+  }
+
+  if (layer && layer.getLatLng) {
+    return layer.getLatLng();
   }
 
   return null;
