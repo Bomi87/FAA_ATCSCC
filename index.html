@@ -1132,17 +1132,53 @@ function parseVolcanicLayerValidTimeUtc(advisory, validTimeText) {
   const hour = Number(hhmm.slice(0, 2));
   const min = Number(hhmm.slice(2, 4));
 
+  if (day < 1 || day > 31 || hour > 23 || min > 59) return null;
+
   const dateText = String(advisory && advisory.date ? advisory.date : getDateValue());
   const base = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!base) return null;
 
   const year = Number(base[1]);
-  const month = Number(base[2]);
+  const monthIndex = Number(base[2]) - 1;
+  const baseDay = Number(base[3]);
+  const baseDate = new Date(Date.UTC(year, monthIndex, baseDay, 0, 0, 0));
+  if (isNaN(baseDate.getTime())) return null;
 
-  const d = new Date(Date.UTC(year, month - 1, day, hour, min, 0));
-  if (isNaN(d.getTime())) return null;
+  // VA forecast/observation layer only contains DD/HHMMZ, without month/year.
+  // Build candidates in previous/current/next month and choose the date closest
+  // to the Advisory issue date. This safely handles:
+  //   30SEP -> 01OCT, 31DEC -> 01JAN, 28/29FEB -> 01MAR,
+  // and also an observation on the previous month (e.g. 01MAR with 28/2300Z).
+  const candidates = [];
 
-  return d;
+  [-1, 0, 1].forEach(offset => {
+    const firstOfTarget = new Date(Date.UTC(year, monthIndex + offset, 1, 0, 0, 0));
+    const targetYear = firstOfTarget.getUTCFullYear();
+    const targetMonth = firstOfTarget.getUTCMonth();
+    const d = new Date(Date.UTC(targetYear, targetMonth, day, hour, min, 0));
+
+    // Date.UTC normalizes impossible dates (e.g. 31FEB), so reject those.
+    if (
+      d.getUTCFullYear() !== targetYear ||
+      d.getUTCMonth() !== targetMonth ||
+      d.getUTCDate() !== day ||
+      d.getUTCHours() !== hour ||
+      d.getUTCMinutes() !== min
+    ) {
+      return;
+    }
+
+    candidates.push(d);
+  });
+
+  if (!candidates.length) return null;
+
+  candidates.sort((a, b) =>
+    Math.abs(a.getTime() - baseDate.getTime()) -
+    Math.abs(b.getTime() - baseDate.getTime())
+  );
+
+  return candidates[0];
 }
 
 function buildVolcanicLayerTimeline(advisory, ash) {
@@ -2891,7 +2927,9 @@ const url =
   (forceRefresh ? "&force=true" : "");
   
   try {
-    const res = await fetch(url, { cache: "default" });
+    // Always ask the Apps Script endpoint for its current response.
+    // This disables only the browser HTTP cache; backend shared caching still applies.
+    const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
 
     if (!data.ok) {
@@ -3876,7 +3914,8 @@ box.innerHTML = `
         "&includeDetails=true";
 
       try {
-        const res = await fetch(url, { cache: "default" });
+        // Same as the CURRENT list: bypass only browser HTTP caching.
+        const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
 
         if (!data.ok) {
