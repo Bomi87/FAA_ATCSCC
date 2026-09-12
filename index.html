@@ -3243,6 +3243,11 @@ function buildDccInfoAdvisoryList() {
 
 
 function getRightPanelControlDisplay_(a) {
+  // 백엔드 canonical 표시값을 최우선 사용.
+  // 구버전 백엔드/캐시와의 호환을 위해 기존 프론트 표시 로직은 fallback으로 유지한다.
+  const canonicalDisplay = String(a && a.displayControlElement || "").trim();
+  if (canonicalDisplay) return canonicalDisplay;
+
   const rawControl = String(a && a.controlElement || "").trim();
   if (!rawControl) return "";
 
