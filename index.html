@@ -3978,6 +3978,7 @@ const sectionClass = categoryInfo.className || (
       ${structuredDisplay.tmiId ? "TMI ID: " + escapeHtml(structuredDisplay.tmiId) + "<br>" : ""}
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
             ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+            ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
       ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
       ${(!structuredDisplay.constrainedArea && !structuredDisplay.constrainedFacilities && a.constrainedFacilities)
         ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>"
@@ -4046,6 +4047,7 @@ box.innerHTML = `
             ${highlightTerms(a.title || "", terms)}<br>
             ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
                         ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+            ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
             ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
             ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
  
@@ -4102,6 +4104,7 @@ box.innerHTML = `
         ${highlightTerms(a.title || "", terms)}<br>
         ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
                 ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+            ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
         ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
         ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
 
@@ -4161,6 +4164,7 @@ box.innerHTML = `
               ${highlightTerms(a.title || "", terms)}<br>
               ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
               ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+            ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
               ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
               ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
          
@@ -4231,6 +4235,7 @@ function showAdvisoryDetail(advn, advisoryDate) {
       ${highlightTerms(a.title || "", uniqueTerms)}<br>
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
             ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), uniqueTerms) + "<br>" : ""}
+      ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), uniqueTerms) + "<br>" : ""}
       ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), uniqueTerms) + "<br>" : ""}
       ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, uniqueTerms) + "<br>" : ""}
       <div class="detail-text">${highlightTerms(raw, uniqueTerms)}</div>
