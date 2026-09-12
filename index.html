@@ -1123,6 +1123,80 @@ let isAdvisoryDetailOpen = false;
 
   return Date.now() - advisoryCacheLoadedAt < ADVISORY_CACHE_TTL_MS;
 }
+
+
+function formatAdvisoryEffectiveTimeDisplay_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+
+  // FAA compact range: DDHHMM-DDHHMM -> DD/HHMMZ ~ DD/HHMMZ
+  const m = s.match(/^(\d{2})(\d{2})(\d{2})\s*-\s*(\d{2})(\d{2})(\d{2})$/);
+  if (m) {
+    return `${m[1]}/${m[2]}${m[3]}Z ~ ${m[4]}/${m[5]}${m[6]}Z`;
+  }
+
+  // Preserve unknown formats exactly as received.
+  return s;
+}
+
+function getAdvisoryEffectiveDisplay_(advisory) {
+  const a = advisory || {};
+  const ash = a.volcanicAsh;
+
+  // Display override is intentionally limited to parsed volcanic advisories.
+  // Keep the original effectiveTime untouched for all non-volcanic advisories.
+  if (!ash || !Array.isArray(ash.layers)) {
+    return formatAdvisoryEffectiveTimeDisplay_(a.effectiveTime);
+  }
+
+  const startText = String(
+    ash.estVaDtg ||
+    ash.obsVaDtg ||
+    ash.baseVaDtg ||
+    ""
+  ).trim();
+
+  let latestText = "";
+  let latestMs = -Infinity;
+
+  ash.layers.forEach(layer => {
+    if (!layer || !layer.validTime) return;
+
+    const validText = String(layer.validTime || "").trim();
+    if (!validText) return;
+
+    const d = parseVolcanicLayerValidTimeUtc(a, validText);
+    if (d && d.getTime() > latestMs) {
+      latestMs = d.getTime();
+      latestText = validText;
+    }
+  });
+
+  // If date parsing fails for an unusual bulletin, fall back to the last
+  // forecast layer that carries a validTime, preserving existing display data.
+  if (!latestText) {
+    for (let i = ash.layers.length - 1; i >= 0; i--) {
+      const validText = String(
+        ash.layers[i] && ash.layers[i].validTime || ""
+      ).trim();
+
+      if (validText) {
+        latestText = validText;
+        break;
+      }
+    }
+  }
+
+  if (startText && latestText) {
+    return startText + " ~ " + latestText;
+  }
+
+  if (startText) return startText;
+  if (latestText) return latestText;
+
+  return formatAdvisoryEffectiveTimeDisplay_(a.effectiveTime);
+}
+
 function parseVolcanicLayerValidTimeUtc(advisory, validTimeText) {
   const s = String(validTimeText || "").trim().toUpperCase();
 
@@ -2629,7 +2703,7 @@ function renderEnrouteEventDetails(evt, advisory) {
         ${getAdvisoryDisplayLabelHtml(advisory)}<br>
         ${escapeHtml(advisory.title || "")}<br>
         ${advisory.controlElement ? "Control: " + escapeHtml(advisory.controlElement) + "<br>" : ""}
-        ${advisory.effectiveTime ? "Effective: " + escapeHtml(advisory.effectiveTime) + "<br>" : ""}
+        ${getAdvisoryEffectiveDisplay_(advisory) ? "Effective: " + escapeHtml(getAdvisoryEffectiveDisplay_(advisory)) + "<br>" : ""}
         ${advisory.message
           ? "<div style='margin-top:4px;'>" + escapeHtml(advisory.message.slice(0, 350)) + "</div>"
           : ""}
@@ -3880,7 +3954,7 @@ const sectionClass = categoryInfo.className || (
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
       ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, terms) + "<br>" : ""}
-      ${a.effectiveTime ? "Effective: " + highlightTerms(a.effectiveTime, terms) + "<br>" : ""}
+      ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
       ${(!structuredDisplay.constrainedArea && !structuredDisplay.constrainedFacilities && a.constrainedFacilities)
         ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>"
         : ""}
@@ -4136,7 +4210,7 @@ function showAdvisoryDetail(advn, advisoryDate) {
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
       ${a.sendTime ? "Send: " + escapeHtml(a.sendTime) + "<br>" : ""}
       ${a.eventTime ? "Event: " + highlightTerms(a.eventTime, uniqueTerms) + "<br>" : ""}
-      ${a.effectiveTime ? "Effective: " + highlightTerms(a.effectiveTime, uniqueTerms) + "<br>" : ""}
+      ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), uniqueTerms) + "<br>" : ""}
       ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, uniqueTerms) + "<br>" : ""}
       <div class="detail-text">${highlightTerms(raw, uniqueTerms)}</div>
       ${a.detailUrl ? "<a href='" + escapeHtml(a.detailUrl) + "' target='_blank'>FAA 원본</a>" : ""}
