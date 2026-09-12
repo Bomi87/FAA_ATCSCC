@@ -1127,21 +1127,6 @@ let isAdvisoryDetailOpen = false;
 
 
 
-function formatAdvisorySendTimeDisplay_(raw) {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-
-  // FAA send time example:
-  // 09/11/26 14:02 -> 11/1402Z
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{2,4})\s+(\d{2}):(\d{2})$/);
-  if (m) {
-    return `${m[2]}/${m[4]}${m[5]}Z`;
-  }
-
-  // Preserve unfamiliar formats exactly as received.
-  return s;
-}
-
 function formatAdvisoryEventTimeDisplay_(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
@@ -3992,8 +3977,7 @@ const sectionClass = categoryInfo.className || (
       ${structuredDisplay.valid ? "Valid: " + escapeHtml(structuredDisplay.valid) + "<br>" : ""}
       ${structuredDisplay.tmiId ? "TMI ID: " + escapeHtml(structuredDisplay.tmiId) + "<br>" : ""}
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
-      ${formatAdvisorySendTimeDisplay_(a.sendTime) ? "Send: " + escapeHtml(formatAdvisorySendTimeDisplay_(a.sendTime)) + "<br>" : ""}
-      ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+            ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
       ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), terms) + "<br>" : ""}
       ${(!structuredDisplay.constrainedArea && !structuredDisplay.constrainedFacilities && a.constrainedFacilities)
         ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>"
@@ -4061,8 +4045,7 @@ box.innerHTML = `
 </a><br>
             ${highlightTerms(a.title || "", terms)}<br>
             ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
-            ${formatAdvisorySendTimeDisplay_(a.sendTime) ? "Send: " + escapeHtml(formatAdvisorySendTimeDisplay_(a.sendTime)) + "<br>" : ""}
-            ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+                        ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
             ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
             ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
  
@@ -4118,8 +4101,7 @@ box.innerHTML = `
 </a><br>
         ${highlightTerms(a.title || "", terms)}<br>
         ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, terms) + "<br>" : ""}
-        ${formatAdvisorySendTimeDisplay_(a.sendTime) ? "Send: " + escapeHtml(formatAdvisorySendTimeDisplay_(a.sendTime)) + "<br>" : ""}
-        ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
+                ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), terms) + "<br>" : ""}
         ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, terms) + "<br>" : ""}
         ${a.message ? "<div style='margin-top:4px;'>" + highlightTerms(a.message.slice(0, 350), terms) + "</div>" : ""}
 
@@ -4248,8 +4230,7 @@ function showAdvisoryDetail(advn, advisoryDate) {
       ${getAdvisoryDisplayLabelHtml(a)}<br>
       ${highlightTerms(a.title || "", uniqueTerms)}<br>
       ${a.controlElement ? "Control: " + highlightTerms(a.controlElement, uniqueTerms) + "<br>" : ""}
-      ${formatAdvisorySendTimeDisplay_(a.sendTime) ? "Send: " + escapeHtml(formatAdvisorySendTimeDisplay_(a.sendTime)) + "<br>" : ""}
-      ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), uniqueTerms) + "<br>" : ""}
+            ${formatAdvisoryEventTimeDisplay_(a.eventTime) ? "Event: " + highlightTerms(formatAdvisoryEventTimeDisplay_(a.eventTime), uniqueTerms) + "<br>" : ""}
       ${getAdvisoryEffectiveDisplay_(a) ? "Effective: " + highlightTerms(getAdvisoryEffectiveDisplay_(a), uniqueTerms) + "<br>" : ""}
       ${a.constrainedFacilities ? "Facility: " + highlightTerms(a.constrainedFacilities, uniqueTerms) + "<br>" : ""}
       <div class="detail-text">${highlightTerms(raw, uniqueTerms)}</div>
