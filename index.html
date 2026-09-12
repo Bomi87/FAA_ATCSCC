@@ -3248,9 +3248,22 @@ function getRightPanelControlDisplay_(a) {
 
   const upperControl = rawControl.toUpperCase();
 
-  // 오른쪽 요약 리스트에서만 DCC + 실제 constrained area/facility를 함께 표시.
-  // 예: DCC + CONSTRAINED AREA: ZAB -> DCC/ZAB
+  // Route / Airspace 계열에서만, 원본 CONTROL이 DCC 단독이고
+  // 백엔드가 이미 확정한 constrainedFacilities가 있으면 오른쪽 목록에 함께 표시한다.
+  // 지도 색칠/매칭 로직에는 사용하지 않는 표시 전용 보정이다.
+  // 예: OCEANIC ROUTE CLOSURE_RQD + Facility ZNY -> DCC/ZNY
+  //     ZHU SWAP_FYI + Facility ZHU -> DCC/ZHU
   if (upperControl === "DCC" && rawControl.indexOf("/") < 0) {
+    const category = getAdvisoryCategoryInfo(a);
+
+    if (category && category.key === "route") {
+      const backendFacility = String(a && a.constrainedFacilities || "").trim();
+      if (backendFacility) {
+        return rawControl + "/" + backendFacility;
+      }
+    }
+
+    // 기존 표시 fallback 유지. Route/Airspace 외 카테고리의 동작은 변경하지 않는다.
     const structured = getStructuredAdvisoryDisplay_(a);
     const constrained =
       String(structured.constrainedArea || "").trim() ||
