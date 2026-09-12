@@ -5063,12 +5063,11 @@ async function toggleTfrLayer() {
       }
 
       try {
-        // 현재 메모리 캐시에 해당 FIR Advisory가 있으면 즉시 표시
-        if (
-          isAdvisoryCacheValid() &&
-          facilityAdvisoryMap[ident] &&
-          facilityAdvisoryMap[ident].length > 0
-        ) {
+        // 현재 CURRENT 메모리 캐시가 유효하면, 해당 FIR의 Advisory 유무와 관계없이
+        // 캐시에서 즉시 처리한다.
+        // 주황색이 아닌 ARTCC(매칭 Advisory 0건)를 클릭해도 전체 CURRENT 목록을
+        // 다시 조회하지 않고 "관련 Advisory 없음"만 표시한다.
+        if (isAdvisoryCacheValid()) {
           renderAdvisoriesForFacilityFromCache(ident);
           return;
         }
