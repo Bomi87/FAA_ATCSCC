@@ -1044,6 +1044,8 @@ function fixMobileViewportAfterKeyboard() {
 
 let selectedLayer = null;
 let selectedIdent = "";
+// 오른쪽 Advisory/공항 목록 선택 시 지도에서 빨간색으로 표시할 ARTCC/FIR 집합
+let selectedAdvisoryMapFacilityCodes = new Set();
 let currentRouteName = "";
 
 let allAdvisoriesCache = [];
@@ -2879,10 +2881,16 @@ function handleAdvisoryListClick(advn, advisoryDate) {
   const a = findAdvisoryByAdvnAndDate(advn, advisoryDate);
 
   if (!a) {
+    selectedAdvisoryMapFacilityCodes = new Set();
+    updateArtccAdvisoryColors();
     clearSelectedEnrouteEvent();
     showDccInfoAdvisorySummary(advn, true, advisoryDate);
     return;
   }
+
+  // 오른쪽 Advisory 하나를 선택하면 그 Advisory와 실제로 매칭되는
+  // ARTCC/FIR을 지도에서 기존 ARTCC 선택과 같은 빨간색으로 표시.
+  selectAdvisoryMapFacilities_(a);
 
   const evt = findEnrouteEventForAdvisory(a);
 
@@ -3385,6 +3393,10 @@ function handleEnrouteEventListClick(key) {
       el.classList.remove("advisory-list-active");
     });
     selectAdvisoryListRow(matched.advn);
+    selectAdvisoryMapFacilities_(matched);
+  } else {
+    selectedAdvisoryMapFacilityCodes = new Set();
+    updateArtccAdvisoryColors();
   }
 
   if (hasDrawableEnrouteGeometry(evt)) {
@@ -3432,7 +3444,13 @@ function toggleArtccImpactLayer() {
         const layer = artccLayerIndex[code];
         if (!layer || !layer.setStyle) return;
 
-        if (selectedIdent && code === selectedIdent) {
+        // 1) 지도에서 직접 선택한 ARTCC
+        // 2) 오른쪽 Advisory/공항 목록에서 선택한 Advisory와 매칭되는 ARTCC/FIR
+        // 둘 중 하나면 기존 selected 스타일(빨간색)을 사용한다.
+        if (
+          (selectedIdent && code === selectedIdent) ||
+          selectedAdvisoryMapFacilityCodes.has(code)
+        ) {
           layer.setStyle(getArtccStyle("selected"));
           return;
         }
@@ -3450,6 +3468,81 @@ function toggleArtccImpactLayer() {
 
       syncArtccImpactToggleButton();
     }
+
+function isSameAdvisoryIdentity_(a, b) {
+  if (!a || !b) return false;
+
+  const advA = normalizeAdvnText(a.advn);
+  const advB = normalizeAdvnText(b.advn);
+  if (!advA || advA !== advB) return false;
+
+  const dateA = String(a.date || "");
+  const dateB = String(b.date || "");
+  return !dateA || !dateB || dateA === dateB;
+}
+
+function getMapFacilityCodesForAdvisory_(advisory) {
+  const found = new Set();
+  if (!advisory) return found;
+
+  // 현재 지도에서 실제 orange 영향 매칭에 사용되는 facilityAdvisoryMap을 기준으로
+  // 동일 Advisory가 연결된 ARTCC/FIR만 선택한다.
+  // 따라서 본문에 단순히 언급된 ARTCC가 빨간색으로 과표시되지 않는다.
+  Object.keys(artccLayerIndex || {}).forEach(code => {
+    const matches = facilityAdvisoryMap[code] || [];
+    if (matches.some(a => isSameAdvisoryIdentity_(a, advisory))) {
+      found.add(code);
+    }
+  });
+
+  // 방어적 fallback: map 매칭 테이블이 아직 만들어지기 전이라면
+  // backend의 controlFacilityCodes만 사용한다.
+  if (!found.size) {
+    (advisory.controlFacilityCodes || []).forEach(code => {
+      expandMapFacilityCodes(code).forEach(mapCode => {
+        if (artccLayerIndex[mapCode]) found.add(mapCode);
+      });
+    });
+  }
+
+  return found;
+}
+
+function selectAdvisoryMapFacilities_(advisory) {
+  // 오른쪽 목록 선택은 기존 지도 직접 선택을 해제하고,
+  // 선택 Advisory의 실제 매칭 ARTCC/FIR을 빨간색으로 표시한다.
+  selectedLayer = null;
+  selectedIdent = "";
+  selectedAdvisoryMapFacilityCodes = getMapFacilityCodesForAdvisory_(advisory);
+
+  const selectedArtccEl = document.getElementById("selectedArtcc");
+  const selectedNameEl = document.getElementById("selectedName");
+  if (selectedArtccEl) selectedArtccEl.textContent = "-";
+  if (selectedNameEl) selectedNameEl.textContent = "-";
+
+  updateArtccAdvisoryColors();
+  updateFaaLink();
+}
+
+function selectAdvisoryMapFacilitiesForList_(advisories) {
+  const found = new Set();
+
+  (advisories || []).forEach(a => {
+    getMapFacilityCodesForAdvisory_(a).forEach(code => found.add(code));
+  });
+
+  selectedLayer = null;
+  selectedIdent = "";
+  selectedAdvisoryMapFacilityCodes = found;
+
+  const selectedArtccEl = document.getElementById("selectedArtcc");
+  const selectedNameEl = document.getElementById("selectedName");
+  if (selectedArtccEl) selectedArtccEl.textContent = "-";
+  if (selectedNameEl) selectedNameEl.textContent = "-";
+
+  updateArtccAdvisoryColors();
+  updateFaaLink();
+}
 
 function renderDccInfoAdvisoryHtml() {
   if (!dccInfoAdvisories || !dccInfoAdvisories.length) {
@@ -3804,9 +3897,15 @@ const sectionClass = categoryInfo.className || (
   .sort(compareAdvisoriesNewestFirst);
 
       if (!matches.length) {
+        selectedAdvisoryMapFacilityCodes = new Set();
+        updateArtccAdvisoryColors();
         box.innerHTML = ap + " 관련 Advisory 없음";
         return;
       }
+
+      // Affected Airports의 공항 행을 선택하면 그 공항에 연결된 Advisory들의
+      // 실제 매칭 ARTCC/FIR을 모두 빨간색으로 표시한다.
+      selectAdvisoryMapFacilitiesForList_(matches);
 
 box.innerHTML = `
   <div class="advisory-item">
@@ -4909,6 +5008,8 @@ async function toggleTfrLayer() {
       const name = p.name || p.fullIdent || p.icaoFir || ident;
       const advisoryBox = document.getElementById("advisoryBox");
 
+      // 지도 ARTCC 직접 선택이 우선: 오른쪽 목록에서 만든 빨간색 매칭은 해제.
+      selectedAdvisoryMapFacilityCodes = new Set();
       selectedLayer = layer;
       selectedIdent = ident;
 
@@ -5007,6 +5108,7 @@ async function toggleTfrLayer() {
     function clearSelectedArtcc() {
   selectedLayer = null;
   selectedIdent = "";
+  selectedAdvisoryMapFacilityCodes = new Set();
 
   document.getElementById("selectedArtcc").textContent = "-";
   document.getElementById("selectedName").textContent = "-";
