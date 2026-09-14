@@ -184,6 +184,18 @@ html, body {
   box-shadow: inset 0 0 0 1px #fca5a5;
 }
 
+/* Backend filtering leaves only the newest surviving DCC OPERATIONS PLAN.
+   Give that single current plan a green visual cue in the right-hand list. */
+.operations-plan-latest {
+  background: #dcfce7;
+  box-shadow: inset 3px 0 0 #16a34a;
+}
+
+.operations-plan-latest .operations-plan-title {
+  color: #15803d !important;
+  font-weight: 700;
+}
+
 .airport-section-title-row {
   display: flex;
   align-items: center;
@@ -3398,6 +3410,15 @@ function getCategoryControlClass(categoryKey) {
   }
 }
 
+function isLatestOperationsPlan_(a) {
+  const control = String(a && a.controlElement || "").toUpperCase().trim();
+  const title = String(a && a.title || "").toUpperCase();
+
+  // The backend already keeps only the newest surviving DCC OPERATIONS PLAN.
+  // This helper is display-only and does not change filtering or advisory data.
+  return control === "DCC" && title.includes("OPERATIONS PLAN");
+}
+
 function renderAdvisoryCategorySection(categoryKey) {
   const list = categorizedAdvisoryGroups[categoryKey] || [];
   if (!list.length) return "";
@@ -3417,14 +3438,14 @@ function renderAdvisoryCategorySection(categoryKey) {
         const rightControlDisplay = getRightPanelControlDisplay_(a);
 
         return `
-          <div class="airport-item ${advisoryHasEnrouteGeometry(a) ? "enroute-event-list-match" : ""}"
+          <div class="airport-item ${advisoryHasEnrouteGeometry(a) ? "enroute-event-list-match" : ""} ${isLatestOperationsPlan_(a) ? "operations-plan-latest" : ""}"
                data-advn="${escapeHtml(a.advn)}"
                data-date="${escapeHtml(a.date || "")}"
                data-control="${escapeHtml(a.controlElement || "")}"
                onclick="event.stopPropagation(); handleAdvisoryListClick('${escapeHtml(a.advn)}', '${escapeHtml(a.date || "")}'); return false;">
             ${getAdvisoryDisplayLabelHtml(a)}${icon}
             ${advisoryHasEnrouteGeometry(a) ? `<span class="enroute-event-hint"> MAP</span>` : ""}<br>
-            <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
+            <span class="${isLatestOperationsPlan_(a) ? "operations-plan-title" : ""}" style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${rightControlDisplay
               ? `<span class="${getCategoryControlClass(categoryKey)}">Control: ${escapeHtml(rightControlDisplay)}</span>`
               : ""}
@@ -3674,10 +3695,10 @@ function renderDccInfoAdvisoryHtml() {
       ${dccInfoAdvisories.map(a => {
         const rightControlDisplay = getRightPanelControlDisplay_(a);
         return `
-          <div class="airport-item"
+          <div class="airport-item ${isLatestOperationsPlan_(a) ? "operations-plan-latest" : ""}"
                onclick="event.stopPropagation(); showDccInfoAdvisorySummary('${escapeHtml(a.advn)}', false, '${escapeHtml(a.date || "")}'); return false;">
             ${getAdvisoryDisplayLabelHtml(a)}<br>
-            <span style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
+            <span class="${isLatestOperationsPlan_(a) ? "operations-plan-title" : ""}" style="color:#374151;">${escapeHtml(a.title || "")}</span><br>
             ${rightControlDisplay ? `<span style="color:#6b7280;">Control: ${escapeHtml(rightControlDisplay)}</span>` : ""}
           </div>
         `;
