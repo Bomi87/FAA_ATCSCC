@@ -622,7 +622,8 @@ html, body {
   display: none;
 }
 
-@media (max-width: 767px) {
+/* Foldable phones can have a tablet-sized CSS viewport when unfolded. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) and (max-width: 1200px) {
  .mobile-panel-buttons {
   position: fixed !important;
   top: calc(env(safe-area-inset-top) + 8px) !important;
@@ -872,6 +873,11 @@ input {
 <div id="map"></div>
 
   <script>
+    /* Keep JavaScript panel behavior aligned with the CSS mobile layout. */
+    function isCompactLayout() {
+      return window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse) and (max-width: 1200px)').matches;
+    }
+
     /*******************************************************
      * Config
      *******************************************************/
@@ -902,7 +908,7 @@ const map = L.map("map", {
   zoomControl: false,
   preferCanvas: true,
   worldCopyJump: false
-}).setView([39.5, 261.5], window.innerWidth <= 767 ? 3 : 4);
+}).setView([39.5, 261.5], isCompactLayout() ? 3 : 4);
 
 // 화산재 polygon은 FIR/ARTCC보다 위에서 mouseover/click을 우선 처리
 map.createPane("volcanicAshPane");
@@ -1017,7 +1023,7 @@ let ndbMarkers = [];
 
 
 function fixMobileViewportAfterKeyboard() {
-  if (window.innerWidth > 767) return;
+  if (!isCompactLayout()) return;
 
   const reset = () => {
     document.documentElement.scrollTop = 0;
@@ -1498,7 +1504,7 @@ function addVolcanicAshPolygonToMap(advisory, ash, layer, boundsList) {
 
     showDccInfoAdvisorySummary(advisory.advn, true);
 
-    if (window.innerWidth <= 767) {
+    if (isCompactLayout()) {
       showMobilePanel("main");
     }
   });
@@ -1799,7 +1805,7 @@ function toNdbLatLngNearReference(lat, lon, referenceLon) {
 }
     
 function getDefaultMapZoom() {
-  return window.innerWidth <= 767 ? 3 : 4;
+  return isCompactLayout() ? 3 : 4;
 }
     /*******************************************************
      * FAA Advisory
@@ -2754,7 +2760,7 @@ function renderEnrouteEventDetails(evt, advisory) {
     </div>
   `;
 
-  if (window.innerWidth <= 767) {
+  if (isCompactLayout()) {
     showMobilePanel("main");
   }
 }
@@ -4010,7 +4016,7 @@ const sectionClass = categoryInfo.className || (
     </div>
   `;
 
-  if (window.innerWidth <= 767) {
+  if (isCompactLayout()) {
     showMobilePanel("main");
   }
 }
@@ -4075,7 +4081,7 @@ box.innerHTML = `
           </div>
         `;
       }).join("");
-      if (window.innerWidth <= 767) {
+      if (isCompactLayout()) {
   showMobilePanel("main");
 }
     }
@@ -4418,7 +4424,7 @@ const geoLayer = L.geoJSON(normalizedBaseballTfrData, {
       });
 
       // 모바일에서는 hover popup이 의미 없고 성능만 떨어뜨리므로 PC에서만 사용
-      if (window.innerWidth > 767) {
+      if (!isCompactLayout()) {
         layer.on("mouseover", function (e) {
           if (layer.setStyle) {
             layer.setStyle({
@@ -5182,7 +5188,7 @@ async function toggleTfrLayer() {
         }
       }
 
-      if (window.innerWidth <= 767) {
+      if (isCompactLayout()) {
         showMobilePanel("main");
       }
 
@@ -5302,7 +5308,7 @@ async function toggleTfrLayer() {
       });
 
       layer.bindPopup(
-        "<div onclick=\"if (window.innerWidth <= 767) showMobilePanel('main');\" style=\"cursor:pointer;\">" +
+        "<div onclick=\"if (isCompactLayout()) showMobilePanel('main');\" style=\"cursor:pointer;\">" +
           "<b>" + escapeHtml(ident) + "</b><br>" +
           escapeHtml(name) +
         "</div>"
@@ -6205,7 +6211,7 @@ function initNdbFixedControl() {
 
   if (!input || !button) return;
 
-  const isMobile = window.innerWidth <= 767;
+  const isMobile = isCompactLayout();
 
   function applyNdbSearch(value) {
     const code = String(value || "")
@@ -6408,7 +6414,7 @@ function startArtccAppAfterAuth() {
       loadAllAdvisoriesForDate();
       autoLoadRouteFromUrl();
 
-      if (window.innerWidth <= 767) {
+      if (isCompactLayout()) {
         showMobilePanel("airports");
       }
     })
